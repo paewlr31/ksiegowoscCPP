@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background:
+    radial-gradient(1200px 500px at 100% -10%, rgba(20, 92, 69, 0.08), transparent 50%),
+    theme("colors.papier");
+}
+
+input, select, textarea {
+  @apply w-full rounded-lg border border-linia bg-white px-3 py-2 text-sm text-atrament outline-none transition;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: theme("colors.las");
+  box-shadow: 0 0 0 3px rgba(20, 92, 69, 0.15);
+}
+
+label.pole {
+  @apply block text-xs font-medium uppercase tracking-wide text-mosiadz;
+}
