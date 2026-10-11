@@ -2,38 +2,59 @@
 
 Aplikacja jednej spółki: dane firmy, faktury, szacunek VAT i CIT, plik JPK_V7M, testowa wysyłka do KSeF.
 
-## Supabase
+Baza to Neon (darmowy Postgres). Na komputerze, bez `DATABASE_URL`, dane lecą do `.data/baza.json`.
 
-1. Załóż projekt na https://supabase.com.
-2. Wejdź w SQL Editor i wklej całość pliku `supabase/schema.sql`. Uruchom.
-3. Wejdź w Project Settings, potem API.
-4. Skopiuj Project URL i klucz `service_role`. Klucza `anon` tu nie używaj.
+## GitHub
+
+Ten folder sam z siebie nie jest repozytorium. Podłącz go do istniejącego repozytorium i wypchnij poprawkę.
+
+```powershell
+cd C:\Users\pryce\Desktop\studia\CPP
+git init
+git branch -M main
+git add ksiegowosc
+git status
+git commit -m "Przenies baze z Supabase na Neon"
+git remote add origin https://github.com/TWOJ-LOGIN/TWOJE-REPO.git
+git pull origin main --rebase
+git push -u origin main
+```
+
+Jeśli `remote add` powie, że origin już jest, pomiń tę linijkę. Jeśli pull krzyczy, że historie się rozjechały, a na GitHubie jest starsza kopia tego samego programu, użyj `git push -u origin main`.
+
+Nie commituj `.env.local` ani `.data`. Są w `.gitignore`.
+
+## Neon
+
+1. Załóż konto na https://neon.tech (logowanie przez GitHub wystarczy).
+2. New Project. Nazwa dowolna, region Europa (np. Frankfurt), Postgres.
+3. Wejdź w SQL Editor i wklej całość pliku `db/schema.sql`. Uruchom.
+4. Na stronie projektu kliknij Connect. Wybierz connection string **Pooled**. Host ma w nazwie `pooler`.
 5. W katalogu `ksiegowosc` zrób plik `.env.local`:
 
 ```
-SUPABASE_URL=https://twoj-projekt.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=twoj-service-role
+DATABASE_URL=postgresql://...pooler...neon.tech/neondb?sslmode=require
 ```
 
-Bez tych dwóch zmiennych program trzyma dane w pliku `.data/baza.json` na twoim komputerze. Na Vercelu taki plik się nie zachowa, więc tam Supabase jest potrzebny.
+Hasło jest w tym linku. Nie wklejaj go na czat ani do GitHuba.
 
 ## Vercel
 
-1. Wypchnij katalog na GitHuba albo w Vercelu wybierz import tego folderu.
-2. Root Directory ustaw na `ksiegowosc`.
-3. Framework: Next.js. Build: `npm run build`.
-4. W Settings, potem Environment Variables, dodaj te same dwie zmienne co wyżej: `SUPABASE_URL` i `SUPABASE_SERVICE_ROLE_KEY`.
-5. `KSEF_TOKEN` możesz zostawić puste. Program czyta token testowy z `klucze.hpp`.
-6. Deploy.
+1. Import projektu z GitHuba. Root Directory: `ksiegowosc`. Framework: Next.js.
+2. Environment Variables, tylko to, co jest potrzebne:
+   - `DATABASE_URL` — ten sam pooled link z Neon.
+   - `KSEF_TOKEN` — opcjonalnie. Jak puste, program bierze token testowy z `klucze.hpp`, który jedzie razem z kodem.
+   - `KSEF_API` — opcjonalnie. Domyślnie jest test: `https://api-test.ksef.mf.gov.pl/api/v2`.
+3. Deploy.
 
-Zakładka „Klucze i bramki” pokazuje token. Nie ustawiaj tej strony jako publicznej.
+Kluczy Supabase już nie dodajesz. Zakładka „Klucze i bramki” pokazuje token KSeF, więc strony nie zostawiaj publicznej.
 
 ## Lokalnie
 
-```
-cd ksiegowosc
+```powershell
+cd C:\Users\pryce\Desktop\studia\CPP\ksiegowosc
 npm install
 npm run dev
 ```
 
-Potem otwórz http://localhost:3000.
+Potem http://localhost:3000. W nagłówku ma być napis Neon, nie „plik lokalny”.

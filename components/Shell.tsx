@@ -26,7 +26,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetch("/api/status")
       .then((r) => r.json())
-      .then((d) => setBaza(d.supabase ? "Supabase" : "plik lokalny"))
+      .then((d) => setBaza(d.baza ? "Neon" : "plik lokalny"))
       .catch(() => setBaza(""));
   }, []);
 
