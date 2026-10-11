@@ -1,12 +1,23 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { neon } from "@neondatabase/serverless";
-import { domyslnaFirma, type Baza, type Faktura, type Firma } from "./typy";
+import { firmaNaDzien } from "./podatki";
+import { domyslnaFirma, uzupelnijFirme, type Baza, type Faktura, type Firma } from "./typy";
 
 const PLIK = path.join(process.cwd(), ".data", "baza.json");
 
+function adresBazy(): string | null {
+  const surowy = process.env.DATABASE_URL?.trim();
+  if (!surowy) return null;
+  const url = surowy.replace(/^DATABASE_URL=/, "").replace(/&channel_binding=[^&]*/g, "");
+  if (url.includes("USER:HASLO") || url.includes("ep-xxxx")) {
+    throw new Error("W Vercelu jest przykładowy adres bazy, nie ten z Neon. Wklej skopiowany connection string z włączonym poolingiem.");
+  }
+  return url;
+}
+
 function klient() {
-  const url = process.env.DATABASE_URL;
+  const url = adresBazy();
   if (!url) return null;
   return neon(url);
 }
@@ -24,7 +35,8 @@ async function wczytajPlik(): Promise<Baza> {
   try {
     const surowe = await fs.readFile(PLIK, "utf8");
     const dane = JSON.parse(surowe) as Baza;
-    return { firma: { ...domyslnaFirma(), ...dane.firma }, faktury: dane.faktury ?? [] };
+    const faktury = dane.faktury ?? [];
+    return { firma: firmaNaDzien(uzupelnijFirme(dane.firma), faktury), faktury };
   } catch {
     return { firma: domyslnaFirma(), faktury: [] };
   }
@@ -42,11 +54,9 @@ export async function wczytajBaze(): Promise<Baza> {
   const firmaWiersze = await sql`select dane from firma where id = 1`;
   const fakturyWiersze = await sql`select dane from faktury order by utworzono desc`;
 
-  const firma = firmaWiersze[0]
-    ? ({ ...domyslnaFirma(), ...jakoObiekt<Firma>(firmaWiersze[0].dane) } satisfies Firma)
-    : domyslnaFirma();
   const faktury = fakturyWiersze.map((wiersz) => jakoObiekt<Faktura>(wiersz.dane));
-  return { firma, faktury };
+  const surowa = firmaWiersze[0] ? jakoObiekt<Firma>(firmaWiersze[0].dane) : domyslnaFirma();
+  return { firma: firmaNaDzien(surowa, faktury), faktury };
 }
 
 export async function zapiszFirme(firma: Firma): Promise<void> {

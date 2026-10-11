@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { wczytajBaze, zapiszFakture } from "@/lib/magazyn";
-import { nastepnyNumer, sumaPozycji, terminPlatnosci } from "@/lib/podatki";
+import { wczytajBaze, zapiszFakture, zapiszFirme } from "@/lib/magazyn";
+import { fakturaZVat, nastepnyNumer, sumaPozycji, terminPlatnosci } from "@/lib/podatki";
 import type { Faktura, Pozycja, TypFaktury } from "@/lib/typy";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,10 @@ export async function POST(zadanie: Request) {
     if (!cialo.nabywca?.nazwa?.trim()) {
       return NextResponse.json({ blad: "Wpisz nazwę nabywcy." }, { status: 400 });
     }
-    const kwoty = sumaPozycji(pozycje, baza.firma.platnikVat);
+    const nettoTej = sumaPozycji(pozycje, false).netto;
+    const zVat = fakturaZVat(baza.firma, baza.faktury, cialo.dataWystawienia, nettoTej, typ);
+    if (zVat && !baza.firma.platnikVat) await zapiszFirme({ ...baza.firma, platnikVat: true });
+    const kwoty = sumaPozycji(pozycje, zVat);
     const faktura: Faktura = {
       id: crypto.randomUUID(),
       numer: cialo.numer?.trim() || nastepnyNumer(baza.faktury, typ, cialo.dataWystawienia),
@@ -46,8 +49,8 @@ export async function POST(zadanie: Request) {
       koryguje: cialo.koryguje,
       przyczynaKorekty: cialo.przyczynaKorekty ?? "",
       ...kwoty,
-      platnikVat: baza.firma.platnikVat,
-      sprzedawca: baza.firma,
+      platnikVat: zVat,
+      sprzedawca: { ...baza.firma, platnikVat: zVat || baza.firma.platnikVat },
       ksefNumer: "",
       ksefStatus: "",
       utworzono: new Date().toISOString(),

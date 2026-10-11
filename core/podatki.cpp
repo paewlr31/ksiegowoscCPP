@@ -7,7 +7,7 @@ long long vat_od_netto_gr(long long netto_gr, int platnik_vat) {
     return znak * ((abs * 23 + 50) / 100);
 }
 
-long long cit_od_przychodu_gr(long long przychod_gr) {
-    if (przychod_gr <= 0) return 0;
-    return (przychod_gr * 19 + 50) / 100;
+long long cit_od_przychodu_gr(long long przychod_gr, int procent) {
+    if (przychod_gr <= 0 || procent <= 0) return 0;
+    return (przychod_gr * procent + 50) / 100;
 }

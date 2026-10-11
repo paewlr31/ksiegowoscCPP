@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { wczytajBaze, zapiszFirme } from "@/lib/magazyn";
-import type { Firma } from "@/lib/typy";
+import { LIMIT_VAT, obrotRoku } from "@/lib/podatki";
+import { uzupelnijFirme, type Firma } from "@/lib/typy";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,10 @@ export async function GET() {
 
 export async function PUT(zadanie: Request) {
   try {
-    const firma = (await zadanie.json()) as Firma;
+    const przychodzaca = uzupelnijFirme((await zadanie.json()) as Firma);
+    const baza = await wczytajBaze();
+    const obrot = obrotRoku(baza.faktury, new Date().getFullYear());
+    const firma = { ...przychodzaca, platnikVat: przychodzaca.vatRecznie || obrot > LIMIT_VAT };
     await zapiszFirme(firma);
     return NextResponse.json(firma);
   } catch (blad) {

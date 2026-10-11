@@ -1,4 +1,6 @@
-import type { Faktura, TypFaktury } from "./typy";
+import { uzupelnijFirme, type Faktura, type Firma, type TypFaktury } from "./typy";
+
+export const LIMIT_VAT = 200_000;
 
 // Te same wzory co core/podatki.cpp. Kwoty wewnętrznie w groszach.
 
@@ -17,9 +19,14 @@ export function vatOdNettoGr(nettoGr: number, platnikVat: boolean): number {
   return znak * Math.round((abs * 23) / 100);
 }
 
-export function citOdPrzychoduGr(przychodGr: number): number {
-  if (przychodGr <= 0) return 0;
-  return Math.round((przychodGr * 19) / 100);
+export function procentCit(firma: Pick<Firma, "rodzaj" | "cit">): number {
+  if (firma.rodzaj !== "spolka") return 0;
+  return firma.cit === "mala" ? 9 : 19;
+}
+
+export function citOdPrzychoduGr(przychodGr: number, procent = 19): number {
+  if (przychodGr <= 0 || procent <= 0) return 0;
+  return Math.round((przychodGr * procent) / 100);
 }
 
 export function kwotyPozycji(ilosc: number, cenaNetto: number, platnikVat: boolean) {
@@ -57,7 +64,27 @@ export function fakturyOkresu(faktury: Faktura[], rok: number, miesiac: number):
   );
 }
 
-export function rozliczenieMiesiaca(faktury: Faktura[], rok: number, miesiac: number) {
+export function obrotRoku(faktury: Faktura[], rok: number): number {
+  return faktury
+    .filter((f) => wliczaSieDoPodatku(f.typ) && f.dataWystawienia.startsWith(String(rok)))
+    .reduce((s, f) => s + f.netto, 0);
+}
+
+export function fakturaZVat(firma: Firma, faktury: Faktura[], data: string, nettoTej: number, typ: TypFaktury): boolean {
+  const rok = Number(data.slice(0, 4));
+  const przed = obrotRoku(faktury, rok);
+  const juzPlatnik = firma.vatRecznie || przed > LIMIT_VAT;
+  if (!wliczaSieDoPodatku(typ)) return juzPlatnik;
+  return juzPlatnik || przed + nettoTej > LIMIT_VAT;
+}
+
+export function firmaNaDzien(firma: Firma, faktury: Faktura[], rok = new Date().getFullYear()): Firma {
+  const uzupelniona = uzupelnijFirme(firma);
+  const platnik = uzupelniona.vatRecznie || obrotRoku(faktury, rok) > LIMIT_VAT;
+  return { ...uzupelniona, platnikVat: platnik };
+}
+
+export function rozliczenieMiesiaca(faktury: Faktura[], rok: number, miesiac: number, stawkaCit = 19) {
   const dokumenty = fakturyOkresu(faktury, rok, miesiac);
   const nettoGr = dokumenty.reduce((s, f) => s + grosze(f.netto), 0);
   const vatGr = dokumenty.reduce((s, f) => s + grosze(f.vat), 0);
@@ -65,7 +92,7 @@ export function rozliczenieMiesiaca(faktury: Faktura[], rok: number, miesiac: nu
     dokumenty,
     netto: zlote(nettoGr),
     vat: zlote(vatGr),
-    cit: zlote(citOdPrzychoduGr(nettoGr)),
+    cit: zlote(citOdPrzychoduGr(nettoGr, stawkaCit)),
   };
 }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Faktura, Firma } from "@/lib/typy";
-import { dniDo, formatDaty, pieniadze, rozliczenieMiesiaca, terminPoOkresie } from "@/lib/podatki";
+import { dniDo, formatDaty, pieniadze, procentCit, rozliczenieMiesiaca, terminPoOkresie } from "@/lib/podatki";
 
 export default function CitStrona() {
   const teraz = new Date();
@@ -24,14 +24,15 @@ export default function CitStrona() {
     });
   }, []);
 
+  const stawka = firma ? procentCit(firma) : 0;
   const rozliczenie = useMemo(
-    () => rozliczenieMiesiaca(faktury, rok, miesiac),
-    [faktury, rok, miesiac],
+    () => rozliczenieMiesiaca(faktury, rok, miesiac, stawka),
+    [faktury, rok, miesiac, stawka],
   );
   const termin = terminPoOkresie(rok, miesiac, 20);
   const zostalo = dniDo(termin);
   const nazwaOkresu = `${String(miesiac).padStart(2, "0")}.${rok}`;
-  const nierejestrowana = (firma?.forma ?? "").toLowerCase().includes("nierejestrow");
+  const nierejestrowana = firma?.rodzaj !== "spolka";
 
   return (
     <div className="space-y-6">
@@ -44,7 +45,7 @@ export default function CitStrona() {
 
       {nierejestrowana && (
         <p className="rounded-2xl border border-mosiadz/40 bg-karta p-4 text-sm leading-relaxed">
-          W danych firmy stoi działalność nierejestrowana. Taka działalność CIT nie płaci. Wyliczenie poniżej jest już pod spółkę z o.o., stawką 19% od netto faktur, bez kosztów. Przelewu nie rób, dopóki nie zmienisz formy na spółkę i nie wpiszesz jej NIP.
+          Działalność nierejestrowana nie płaci CIT. Kwota poniżej jest zero. Żeby liczyć podatek, w danych firmy wybierz spółkę z o.o. i małą albo dużą stawkę.
         </p>
       )}
 
@@ -60,7 +61,7 @@ export default function CitStrona() {
       <section className="rounded-2xl border border-linia bg-karta p-5">
         <p className="text-sm">Szacunek zaliczki CIT za {nazwaOkresu}</p>
         <p className="font-serif text-4xl">{pieniadze(rozliczenie.cit)} zł</p>
-        <p className="mt-2 text-sm">Przychód netto z faktur: {pieniadze(rozliczenie.netto)} zł. Stawka 19%. Proformy pominięte.</p>
+        <p className="mt-2 text-sm">Przychód netto z faktur: {pieniadze(rozliczenie.netto)} zł. Stawka {stawka}%. Proformy pominięte. Bez kosztów.</p>
         <p className="mt-1 text-sm">
           Termin przelewu: {formatDaty(termin)}. {zostalo < 0 ? "Termin minął." : zostalo === 0 ? "Termin jest dzisiaj." : `Zostało ${zostalo} dni.`}
         </p>

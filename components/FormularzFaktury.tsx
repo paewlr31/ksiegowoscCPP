@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ETYKIETA, pustyNabywca, type Faktura, type Firma, type Pozycja, type TypFaktury } from "@/lib/typy";
-import { pieniadze, sumaPozycji } from "@/lib/podatki";
+import { fakturaZVat, pieniadze, sumaPozycji } from "@/lib/podatki";
 
 const DZIS = new Date().toISOString().slice(0, 10);
 
@@ -43,10 +43,11 @@ export function FormularzFaktury() {
     );
   }, []);
 
-  const kwoty = useMemo(
-    () => sumaPozycji(pozycje, Boolean(firma?.platnikVat)),
-    [pozycje, firma?.platnikVat],
-  );
+  const kwoty = useMemo(() => {
+    const netto = sumaPozycji(pozycje, false).netto;
+    const zVat = firma ? fakturaZVat(firma, faktury, dataWystawienia, netto, typ) : false;
+    return { ...sumaPozycji(pozycje, zVat), zVat };
+  }, [pozycje, firma, faktury, dataWystawienia, typ]);
 
   const zaliczki = faktury.filter((f) => podstawy.includes(f.id));
 
@@ -221,9 +222,9 @@ export function FormularzFaktury() {
       <aside className="h-fit rounded-2xl border border-linia bg-karta p-5">
         <p className="text-xs uppercase tracking-wide text-mosiadz">Razem</p>
         <p className="mt-2">Netto {pieniadze(kwoty.netto)} zł</p>
-        <p>VAT {firma?.platnikVat ? "23%" : "zwolniony"} · {pieniadze(kwoty.vat)} zł</p>
+        <p>VAT {kwoty.zVat ? "23%" : "zwolniony"} · {pieniadze(kwoty.vat)} zł</p>
         <p className="font-serif text-3xl">{pieniadze(kwoty.brutto)} zł</p>
-        {!firma?.platnikVat && <p className="mt-3 text-xs leading-relaxed text-atrament/70">{firma?.podstawaZwolnienia}</p>}
+        {!kwoty.zVat && <p className="mt-3 text-xs leading-relaxed text-atrament/70">{firma?.podstawaZwolnienia}</p>}
         {typ === "korekta" && <p className="mt-3 text-sm">Przy korekcie wpisz różnicę. Kwota ujemna zmniejsza podatek.</p>}
       </aside>
     </form>

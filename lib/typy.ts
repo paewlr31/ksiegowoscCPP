@@ -9,9 +9,14 @@ export type Pozycja = {
   cenaNetto: number;
 };
 
+export type RodzajDzialalnosci = "nierejestrowana" | "spolka";
+export type WielkoscCit = "mala" | "duza";
+
 export type Firma = {
   nazwa: string;
   forma: string;
+  rodzaj: RodzajDzialalnosci;
+  cit: WielkoscCit;
   ulica: string;
   kod: string;
   miasto: string;
@@ -20,6 +25,7 @@ export type Firma = {
   nip: string;
   rachunek: string;
   platnikVat: boolean;
+  vatRecznie: boolean;
   podstawaZwolnienia: string;
   kodUrzedu: string;
   mikrorachunek: string;
@@ -73,6 +79,8 @@ export function domyslnaFirma(): Firma {
   return {
     nazwa: "Paweł Rycerz",
     forma: "Działalność nierejestrowana",
+    rodzaj: "nierejestrowana",
+    cit: "duza",
     ulica: "ul. Wacława Lipińskiego 9/6",
     kod: "30-349",
     miasto: "Kraków",
@@ -81,10 +89,18 @@ export function domyslnaFirma(): Firma {
     nip: "",
     rachunek: "39 1140 2004 0000 3302 8341 9061",
     platnikVat: false,
+    vatRecznie: false,
     podstawaZwolnienia: PODSTAWA_ZWOLNIENIA,
     kodUrzedu: "",
     mikrorachunek: "",
   };
+}
+
+export function uzupelnijFirme(dane?: Partial<Firma>): Firma {
+  const firma: Firma = { ...domyslnaFirma(), ...dane };
+  if (dane && dane.vatRecznie === undefined && dane.platnikVat) firma.vatRecznie = true;
+  firma.forma = firma.rodzaj === "spolka" ? "Spółka z o.o." : "Działalność nierejestrowana";
+  return firma;
 }
 
 export function pustyNabywca(): Nabywca {

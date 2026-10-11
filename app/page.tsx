@@ -1,17 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Firma } from "@/lib/typy";
+import type { Faktura, Firma } from "@/lib/typy";
+import { LIMIT_VAT, obrotRoku, pieniadze } from "@/lib/podatki";
 
 export default function DaneFirmy() {
   const [firma, setFirma] = useState<Firma | null>(null);
+  const [faktury, setFaktury] = useState<Faktura[]>([]);
   const [zapis, setZapis] = useState("");
   const [blad, setBlad] = useState("");
 
   useEffect(() => {
-    fetch("/api/firma")
-      .then((r) => r.json())
-      .then(setFirma);
+    Promise.all([fetch("/api/firma").then((r) => r.json()), fetch("/api/faktury").then((r) => r.json())]).then(
+      ([f, lista]) => {
+        setFirma(f);
+        setFaktury(Array.isArray(lista) ? lista : []);
+      },
+    );
   }, []);
 
   async function zapisz(e: React.FormEvent) {
@@ -52,30 +57,65 @@ export default function DaneFirmy() {
       </p>
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {pole("nazwa", "Nazwa", true)}
-        {pole("forma", "Forma", true)}
+        <label className="pole">
+          Forma
+          <select
+            className="mt-1"
+            value={firma.rodzaj}
+            onChange={(e) => setFirma({ ...firma, rodzaj: e.target.value as Firma["rodzaj"] })}
+          >
+            <option value="nierejestrowana">Działalność nierejestrowana</option>
+            <option value="spolka">Spółka z o.o.</option>
+          </select>
+        </label>
+        {firma.rodzaj === "spolka" && (
+          <label className="pole">
+            CIT
+            <select
+              className="mt-1"
+              value={firma.cit}
+              onChange={(e) => setFirma({ ...firma, cit: e.target.value as Firma["cit"] })}
+            >
+              <option value="mala">Mała spółka, 9%</option>
+              <option value="duza">Duża spółka, 19%</option>
+            </select>
+          </label>
+        )}
         {pole("ulica", "Ulica", true)}
         {pole("kod", "Kod")}
         {pole("miasto", "Miasto")}
         {pole("email", "E-mail")}
         {pole("telefon", "Telefon")}
-        {pole("nip", "NIP")}
+        <label className="pole">
+          NIP
+          <input className="mt-1" value={firma.nip} onChange={(e) => setFirma({ ...firma, nip: e.target.value })} />
+          <button type="button" className="mt-1 text-xs normal-case tracking-normal text-las underline" onClick={() => setFirma({ ...firma, nip: "1111111111" })}>
+            Wstaw testowy 1111111111
+          </button>
+        </label>
         {pole("rachunek", "Rachunek bankowy", true)}
         {pole("kodUrzedu", "Kod urzędu skarbowego do JPK")}
         {pole("mikrorachunek", "Mikrorachunek na CIT i VAT", true)}
       </div>
       <p className="mt-2 text-xs text-atrament/60">Puste NIP na fakturze pokaże się jako „brak”. Mikrorachunek uzupełnisz, gdy spółka dostanie NIP.</p>
 
-      <label className="mt-6 flex items-start gap-3 rounded-xl border border-linia bg-papier p-4">
+      <div className="mt-6 rounded-xl border border-linia bg-papier p-4 text-sm">
+        <p>Obrót w {new Date().getFullYear()} bez proform: {pieniadze(obrotRoku(faktury, new Date().getFullYear()))} zł z {pieniadze(LIMIT_VAT)} zł.</p>
+        <p className="mt-1 text-atrament/70">Do tego limitu VAT się nie nalicza. Faktura, która go przekroczy, i każda następna dostają 23% same.</p>
+      </div>
+
+      <label className="mt-4 flex items-start gap-3 rounded-xl border border-linia bg-papier p-4">
         <input
           type="checkbox"
           className="mt-1 w-auto"
-          checked={firma.platnikVat}
-          onChange={(e) => setFirma({ ...firma, platnikVat: e.target.checked })}
+          checked={firma.vatRecznie || obrotRoku(faktury, new Date().getFullYear()) > LIMIT_VAT}
+          disabled={obrotRoku(faktury, new Date().getFullYear()) > LIMIT_VAT}
+          onChange={(e) => setFirma({ ...firma, vatRecznie: e.target.checked })}
         />
         <span>
-          <span className="block font-medium normal-case tracking-normal text-atrament">Jestem płatnikiem VAT</span>
+          <span className="block font-medium normal-case tracking-normal text-atrament">Płatnik VAT wcześniej, bo tak wynika z działalności</span>
           <span className="mt-1 block text-sm normal-case tracking-normal text-atrament/70">
-            Po zaznaczeniu każda nowa faktura dostaje 23%. To stawka za strony, aplikacje webowe, Androida i iOS. Teraz, przy działalności nierejestrowanej, zostaw odznaczone.
+            Zaznacz, jeśli 23% ma być od razu, zanim obrót dojdzie do 200 000 zł. Jak limit padnie, ptaszek zostaje sam i nie da się go odznaczyć.
           </span>
         </span>
       </label>
