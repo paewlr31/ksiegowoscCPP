@@ -75,6 +75,17 @@ export async function zapiszFirme(firma: Firma): Promise<void> {
   `;
 }
 
+export async function usunFakture(id: string): Promise<void> {
+  const sql = klient();
+  if (!sql) {
+    const baza = await wczytajPlik();
+    baza.faktury = baza.faktury.filter((f) => f.id !== id);
+    await zapiszPlik(baza);
+    return;
+  }
+  await sql`delete from faktury where id = ${id}`;
+}
+
 export async function zapiszFakture(faktura: Faktura): Promise<void> {
   const sql = klient();
   if (!sql) {

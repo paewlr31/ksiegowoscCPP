@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Lancuch } from "@/components/Lancuch";
 import { PodgladFaktury } from "@/components/PodgladFaktury";
@@ -9,6 +9,7 @@ import type { Faktura, Firma } from "@/lib/typy";
 
 export default function FakturaStrona() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [firma, setFirma] = useState<Firma | null>(null);
   const [faktury, setFaktury] = useState<Faktura[]>([]);
   const [nipTestowy, setNipTestowy] = useState("");
@@ -61,6 +62,29 @@ export default function FakturaStrona() {
           <button type="button" onClick={() => window.print()} className="rounded-lg border border-linia bg-karta px-4 py-2 text-sm">
             Pobierz PDF
           </button>
+          {!faktura.ksefNumer && (
+            <>
+              <Link href={`/faktury/${faktura.id}/edytuj`} className="rounded-lg border border-linia bg-karta px-4 py-2 text-sm">
+                Edytuj
+              </Link>
+              <button
+                type="button"
+                className="rounded-lg border border-burak/40 px-4 py-2 text-sm text-burak"
+                onClick={async () => {
+                  if (!window.confirm("Usunąć tę fakturę? Do KSeF nie weszła.")) return;
+                  const odpowiedz = await fetch(`/api/faktury/${faktura.id}`, { method: "DELETE" });
+                  const dane = await odpowiedz.json();
+                  if (!odpowiedz.ok) {
+                    setKomunikat(dane.blad || "Nie usunięto.");
+                    return;
+                  }
+                  router.push("/faktury");
+                }}
+              >
+                Anuluj fakturę
+              </button>
+            </>
+          )}
         </div>
         <PodgladFaktury faktura={faktura} firma={firma} />
         <div className="no-print rounded-2xl border border-linia bg-karta p-4">

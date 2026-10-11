@@ -17,7 +17,7 @@ const NABYWCA_TEST = {
   telefon: "500 600 700",
 };
 
-export function FormularzFaktury() {
+export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
   const router = useRouter();
   const [firma, setFirma] = useState<Firma | null>(null);
   const [faktury, setFaktury] = useState<Faktura[]>([]);
@@ -43,11 +43,24 @@ export function FormularzFaktury() {
     );
   }, []);
 
+  useEffect(() => {
+    if (!edytowana) return;
+    setTyp(edytowana.typ);
+    setDataWystawienia(edytowana.dataWystawienia);
+    setDataSprzedazy(edytowana.dataSprzedazy);
+    setNabywca({ ...pustyNabywca(), ...edytowana.nabywca });
+    setPozycje(edytowana.pozycje);
+    setPodstawy(edytowana.podstawy);
+    setKoryguje(edytowana.koryguje ?? "");
+    setPrzyczyna(edytowana.przyczynaKorekty);
+  }, [edytowana]);
+
   const kwoty = useMemo(() => {
     const netto = sumaPozycji(pozycje, false).netto;
-    const zVat = firma ? fakturaZVat(firma, faktury, dataWystawienia, netto, typ) : false;
+    const bezTej = faktury.filter((f) => f.id !== edytowana?.id);
+    const zVat = firma ? fakturaZVat(firma, bezTej, dataWystawienia, netto, typ) : false;
     return { ...sumaPozycji(pozycje, zVat), zVat };
-  }, [pozycje, firma, faktury, dataWystawienia, typ]);
+  }, [pozycje, firma, faktury, dataWystawienia, typ, edytowana?.id]);
 
   const zaliczki = faktury.filter((f) => podstawy.includes(f.id));
 
@@ -66,8 +79,8 @@ export function FormularzFaktury() {
     if (!firma) return;
     setZapis(true);
     setBlad("");
-    const odpowiedz = await fetch("/api/faktury", {
-      method: "POST",
+    const odpowiedz = await fetch(edytowana ? `/api/faktury/${edytowana.id}` : "/api/faktury", {
+      method: edytowana ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         typ,
@@ -94,7 +107,7 @@ export function FormularzFaktury() {
     <form onSubmit={zapisz} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
       <div className="space-y-5 rounded-2xl border border-linia bg-karta p-5 shadow-kartka">
         <div>
-          <p className="font-serif text-3xl">Nowa faktura</p>
+          <p className="font-serif text-3xl">{edytowana ? `Edycja ${edytowana.numer}` : "Nowa faktura"}</p>
           <p className="text-sm text-atrament/70">Sprzedawcą jest firma z danych ogólnych. Tu zmieniasz tylko nabywcę i pozycje.</p>
         </div>
 
@@ -214,9 +227,14 @@ export function FormularzFaktury() {
         </div>
 
         {blad && <p className="rounded-lg bg-burak/10 px-3 py-2 text-sm text-burak">{blad}</p>}
-        <button type="submit" disabled={zapis} className="rounded-lg bg-las px-4 py-2 text-white disabled:opacity-50">
-          {zapis ? "Zapisuję..." : "Zapisz fakturę"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button type="submit" disabled={zapis} className="rounded-lg bg-las px-4 py-2 text-white disabled:opacity-50">
+            {zapis ? "Zapisuję..." : edytowana ? "Zapisz zmiany" : "Zapisz fakturę"}
+          </button>
+          <button type="button" className="rounded-lg border border-linia px-4 py-2 text-sm" onClick={() => router.push(edytowana ? `/faktury/${edytowana.id}` : "/faktury")}>
+            Anuluj
+          </button>
+        </div>
       </div>
 
       <aside className="h-fit rounded-2xl border border-linia bg-karta p-5">
