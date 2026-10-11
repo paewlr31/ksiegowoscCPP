@@ -1,5 +1,5 @@
 import { ETYKIETA, type Faktura, type Firma } from "@/lib/typy";
-import { pieniadze } from "@/lib/podatki";
+import { pieniadze, poPolsku, terminPlatnosci } from "@/lib/podatki";
 
 export function PodgladFaktury({ faktura, firma }: { faktura: Faktura; firma: Firma }) {
   const sprzedawca = faktura.sprzedawca ?? firma;
@@ -30,11 +30,21 @@ export function PodgladFaktury({ faktura, firma }: { faktura: Faktura; firma: Fi
           <p className="text-sm">{faktura.nabywca.ulica}</p>
           <p className="text-sm">{faktura.nabywca.kod} {faktura.nabywca.miasto}</p>
           <p className="text-sm">NIP: {faktura.nabywca.nip || "brak"}</p>
+          <p className="text-sm">E-mail: {faktura.nabywca.email || "brak"}</p>
+          <p className="text-sm">Telefon: {faktura.nabywca.telefon || "brak"}</p>
         </div>
       </div>
       <p className="mt-4 text-sm text-atrament/70">
-        Wystawiono {faktura.dataWystawienia}, sprzedaż {faktura.dataSprzedazy}
+        Wystawiono {poPolsku(faktura.dataWystawienia)}, sprzedaż {poPolsku(faktura.dataSprzedazy)}
       </p>
+      <div className="mt-4 rounded-xl border border-las/30 bg-las/5 p-4">
+        <p className="text-xs uppercase tracking-wide text-mosiadz">Płatność</p>
+        <p className="mt-1 font-medium">Zapłać do {poPolsku(faktura.terminPlatnosci || terminPlatnosci(faktura.dataWystawienia))}</p>
+        <p className="text-sm">7 dni od daty wystawienia</p>
+        <p className="mt-2 text-sm">Kwota: {pieniadze(faktura.brutto)} zł</p>
+        <p className="text-sm">Rachunek: {sprzedawca.rachunek}</p>
+        <p className="text-sm">Tytuł: {faktura.numer}</p>
+      </div>
       <table className="mt-4 w-full text-sm">
         <thead>
           <tr className="border-b border-linia text-left text-xs uppercase text-mosiadz">

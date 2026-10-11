@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { wczytajBaze, zapiszFakture } from "@/lib/magazyn";
-import { nastepnyNumer, sumaPozycji } from "@/lib/podatki";
+import { nastepnyNumer, sumaPozycji, terminPlatnosci } from "@/lib/podatki";
 import type { Faktura, Pozycja, TypFaktury } from "@/lib/typy";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export async function GET() {
 
 export async function POST(zadanie: Request) {
   try {
-    const cialo = (await zadanie.json()) as Omit<Faktura, "id" | "numer" | "netto" | "vat" | "brutto" | "utworzono" | "ksefNumer" | "ksefStatus"> & {
+    const cialo = (await zadanie.json()) as Omit<Faktura, "id" | "numer" | "netto" | "vat" | "brutto" | "utworzono" | "ksefNumer" | "ksefStatus" | "terminPlatnosci"> & {
       numer?: string;
     };
     const baza = await wczytajBaze();
@@ -39,6 +39,7 @@ export async function POST(zadanie: Request) {
       typ,
       dataWystawienia: cialo.dataWystawienia,
       dataSprzedazy: cialo.dataSprzedazy,
+      terminPlatnosci: terminPlatnosci(cialo.dataWystawienia),
       pozycje,
       nabywca: cialo.nabywca,
       podstawy: cialo.podstawy ?? [],

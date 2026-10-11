@@ -14,6 +14,7 @@ const NABYWCA_TEST = {
   kod: "00-001",
   miasto: "Warszawa",
   email: "test@example.com",
+  telefon: "500 600 700",
 };
 
 export function FormularzFaktury() {
@@ -168,8 +169,11 @@ export function FormularzFaktury() {
           <label className="pole">NIP
             <input className="mt-1" value={nabywca.nip} onChange={(e) => setNabywca({ ...nabywca, nip: e.target.value })} />
           </label>
-          <label className="pole">E-mail
+          <label className="pole">E-mail, puste znaczy brak
             <input className="mt-1" value={nabywca.email} onChange={(e) => setNabywca({ ...nabywca, email: e.target.value })} />
+          </label>
+          <label className="pole">Telefon, puste znaczy brak
+            <input className="mt-1" value={nabywca.telefon} onChange={(e) => setNabywca({ ...nabywca, telefon: e.target.value })} />
           </label>
           <label className="pole sm:col-span-2">Ulica
             <input className="mt-1" value={nabywca.ulica} onChange={(e) => setNabywca({ ...nabywca, ulica: e.target.value })} />

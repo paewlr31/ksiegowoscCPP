@@ -115,6 +115,38 @@ export function formatDaty(d: Date): string {
   return d.toLocaleDateString("pl-PL");
 }
 
+export function terminPlatnosci(dataWystawienia: string): string {
+  const [rok, miesiac, dzien] = dataWystawienia.split("-").map(Number);
+  const data = new Date(rok, miesiac - 1, dzien + 7);
+  const mm = String(data.getMonth() + 1).padStart(2, "0");
+  const dd = String(data.getDate()).padStart(2, "0");
+  return `${data.getFullYear()}-${mm}-${dd}`;
+}
+
+export function poPolsku(iso: string): string {
+  const [rok, miesiac, dzien] = iso.split("-");
+  if (!rok || !miesiac || !dzien) return iso;
+  return `${dzien}.${miesiac}.${rok}`;
+}
+
+export function wolnyNumer(faktury: Faktura[], typ: TypFaktury, data: string, zajeteDodatkowo: string[] = []): string {
+  const [rok, miesiac] = data.split("-");
+  const prefiks = { proforma: "PRO", zaliczkowa: "FZAL", koncowa: "FV", korekta: "FK" }[typ];
+  const zajete = new Set([
+    ...faktury
+      .filter((f) => f.typ === typ && f.dataWystawienia.startsWith(`${rok}-${miesiac}`))
+      .map((f) => f.numer),
+    ...zajeteDodatkowo,
+  ]);
+  let n = 1;
+  let numer = "";
+  do {
+    numer = `${prefiks}/${n}/${Number(miesiac)}/${rok}`;
+    n += 1;
+  } while (zajete.has(numer));
+  return numer;
+}
+
 export function nastepnyNumer(faktury: Faktura[], typ: TypFaktury, data: string): string {
   const [rok, miesiac] = data.split("-");
   const prefiks = { proforma: "PRO", zaliczkowa: "FZAL", koncowa: "FV", korekta: "FK" }[typ];

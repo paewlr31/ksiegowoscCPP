@@ -7,6 +7,9 @@ const katalog = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: katalog,
+  turbopack: {
+    root: katalog,
+  },
 };
 
 export default nextConfig;

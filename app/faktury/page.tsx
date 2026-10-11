@@ -32,7 +32,9 @@ export default function ListaFaktur() {
             </span>
             <span className="text-right">
               <span className="block font-medium">{pieniadze(f.brutto)} zł</span>
-              <span className="text-xs text-atrament/50">{f.ksefNumer ? "KSeF" : f.typ === "proforma" ? "bez KSeF" : "lokalnie"}</span>
+              <span className={`text-xs ${f.ksefNumer ? "text-las" : "text-atrament/50"}`}>
+                {f.ksefNumer ? "jest w KSeF" : f.typ === "proforma" ? "proforma, tylko PDF" : "nie wysłana do KSeF"}
+              </span>
             </span>
           </Link>
         ))}

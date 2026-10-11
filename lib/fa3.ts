@@ -68,6 +68,7 @@ export function fakturaFa3(faktura: Faktura, firma: Firma, nipSprzedawcy: string
   <Podmiot2>
     <DaneIdentyfikacyjne>${idNabywcy}<Nazwa>${x(faktura.nabywca.nazwa)}</Nazwa></DaneIdentyfikacyjne>
     <Adres><KodKraju>PL</KodKraju><AdresL1>${x(faktura.nabywca.ulica || "brak")}</AdresL1><AdresL2>${x(`${faktura.nabywca.kod} ${faktura.nabywca.miasto}`.trim())}</AdresL2></Adres>
+    ${kontaktNabywcy(faktura)}
     <JST>2</JST>
     <GV>2</GV>
   </Podmiot2>
@@ -93,6 +94,13 @@ export function fakturaFa3(faktura: Faktura, firma: Firma, nipSprzedawcy: string
     ${wiersze}
   </Fa>
 </Faktura>`;
+}
+
+function kontaktNabywcy(faktura: Faktura): string {
+  const email = faktura.nabywca.email.trim();
+  const telefon = faktura.nabywca.telefon.replace(/\s/g, "").slice(0, 16);
+  if (!email && !telefon) return "";
+  return `<DaneKontaktowe>${email ? `<Email>${x(email)}</Email>` : ""}${telefon ? `<Telefon>${x(telefon)}</Telefon>` : ""}</DaneKontaktowe>`;
 }
 
 function blokKorekty(faktura: Faktura, wszystkie: Faktura[]): string {

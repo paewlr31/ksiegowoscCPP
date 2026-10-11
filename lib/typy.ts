@@ -32,6 +32,7 @@ export type Nabywca = {
   kod: string;
   miasto: string;
   email: string;
+  telefon: string;
 };
 
 export type Faktura = {
@@ -40,6 +41,7 @@ export type Faktura = {
   typ: TypFaktury;
   dataWystawienia: string;
   dataSprzedazy: string;
+  terminPlatnosci: string;
   pozycje: Pozycja[];
   nabywca: Nabywca;
   podstawy: string[];
@@ -86,5 +88,5 @@ export function domyslnaFirma(): Firma {
 }
 
 export function pustyNabywca(): Nabywca {
-  return { nazwa: "", nip: "", ulica: "", kod: "", miasto: "", email: "" };
+  return { nazwa: "", nip: "", ulica: "", kod: "", miasto: "", email: "", telefon: "" };
 }

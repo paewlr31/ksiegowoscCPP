@@ -24,3 +24,10 @@ input:focus, select:focus, textarea:focus {
 label.pole {
   @apply block text-xs font-medium uppercase tracking-wide text-mosiadz;
 }
+
+@media print {
+  header, nav, .no-print { display: none !important; }
+  body { background: white !important; }
+  main { max-width: none !important; padding: 0 !important; }
+  article { border: none !important; box-shadow: none !important; }
+}
