@@ -10,6 +10,7 @@ const nextConfig = {
   turbopack: {
     root: katalog,
   },
+  serverExternalPackages: ["xadesjs", "xmldsigjs", "xml-core", "@xmldom/xmldom", "xpath", "@peculiar/webcrypto", "node-forge"],
 };
 
 export default nextConfig;

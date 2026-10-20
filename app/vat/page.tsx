@@ -12,6 +12,9 @@ export default function VatStrona() {
   const [rok, setRok] = useState(teraz.getMonth() === 0 ? teraz.getFullYear() - 1 : teraz.getFullYear());
   const [miesiac, setMiesiac] = useState(teraz.getMonth() === 0 ? 12 : teraz.getMonth());
   const [mikrorachunek, setMikrorachunek] = useState("");
+  const [wysylka, setWysylka] = useState("");
+  const [trwa, setTrwa] = useState(false);
+  const [upo, setUpo] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -37,6 +40,52 @@ export default function VatStrona() {
   const nazwaOkresu = `${String(miesiac).padStart(2, "0")}.${rok}`;
   const jestImport = rozliczenie.importUe.length > 0 || rozliczenie.importPozaUe.length > 0;
   const trzebaJpk = Boolean(firma?.platnikVat) || jestImport;
+
+  async function wyslij() {
+    setTrwa(true);
+    setWysylka("Pakuję plik i wysyłam na bramkę testową...");
+    setUpo("");
+    const odpowiedz = await fetch("/api/jpk/wyslij", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rok, miesiac }),
+    });
+    let dane = await odpowiedz.json();
+    if (!odpowiedz.ok) {
+      setWysylka(dane.blad || "Nie wysłano.");
+      setTrwa(false);
+      return;
+    }
+    for (let i = 0; i < 20 && dane.kod > 0 && dane.kod < 200; i++) {
+      setWysylka(`Bramka jeszcze sprawdza plik (${dane.opis || dane.kod}). Numer ${dane.numerReferencyjny}.`);
+      await new Promise((rozwiaz) => setTimeout(rozwiaz, 3000));
+      const status = await fetch(`/api/jpk/status?numer=${dane.numerReferencyjny}`);
+      const kolejny = await status.json();
+      if (!status.ok) {
+        dane = { ...dane, opis: kolejny.blad || dane.opis };
+        break;
+      }
+      dane = kolejny;
+    }
+    if (dane.kod === 200) {
+      setWysylka(`Bramka testowa przyjęła JPK za ${nazwaOkresu}. Numer referencyjny: ${dane.numerReferencyjny}. To nie jest prawdziwy urząd, przelewu z tego testu nie rób.`);
+      setUpo(dane.upo || "");
+    } else {
+      setWysylka(dane.opis || dane.blad || `Bramka zwróciła kod ${dane.kod}. Numer ${dane.numerReferencyjny || ""}.`);
+      setUpo("");
+    }
+    setTrwa(false);
+  }
+
+  function pobierzUpo() {
+    const plik = new Blob([upo], { type: "application/xml" });
+    const adres = URL.createObjectURL(plik);
+    const link = document.createElement("a");
+    link.href = adres;
+    link.download = `UPO_${rok}_${String(miesiac).padStart(2, "0")}.xml`;
+    link.click();
+    URL.revokeObjectURL(adres);
+  }
 
   return (
     <div className="space-y-6">
@@ -84,12 +133,20 @@ export default function VatStrona() {
                   ? "Termin jest dzisiaj."
                   : `Zostało ${zostalo} dni.`}
             </p>
-            <a
-              className="mt-4 inline-block rounded-lg bg-las px-4 py-2 text-sm text-white"
-              href={`/api/jpk?rok=${rok}&miesiac=${miesiac}`}
-            >
-              Pobierz XML JPK_V7M za {nazwaOkresu}
-            </a>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button type="button" className="rounded-lg bg-las px-4 py-2 text-sm text-white disabled:opacity-60" disabled={trwa} onClick={wyslij}>
+                {trwa ? "Wysyłam..." : `Wyślij JPK_V7M za ${nazwaOkresu} na bramkę testową`}
+              </button>
+              <a className="rounded-lg border border-linia px-4 py-2 text-sm" href={`/api/jpk?rok=${rok}&miesiac=${miesiac}`}>
+                Pobierz XML
+              </a>
+              {upo && (
+                <button type="button" className="rounded-lg border border-linia px-4 py-2 text-sm" onClick={pobierzUpo}>
+                  Pobierz UPO
+                </button>
+              )}
+            </div>
+            {wysylka && <p className="mt-3 text-sm leading-relaxed">{wysylka}</p>}
             {!firma?.nip && <p className="mt-2 text-sm text-burak">W danych firmy nie ma NIP. Dopisz go, zanim wyślesz plik.</p>}
             {!firma?.kodUrzedu && <p className="mt-1 text-sm text-burak">W danych firmy nie ma kodu urzędu. Bez niego bramka pliku nie przyjmie.</p>}
             {rozliczenie.importUe.length > 0 && (
@@ -103,8 +160,8 @@ export default function VatStrona() {
           <details className="rounded-2xl border border-linia bg-karta p-5" open>
             <summary className="cursor-pointer font-medium">Gdzie złożyć i jak zapłacić</summary>
             <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed">
-              <li>Pobierz przyciskiem plik XML za {nazwaOkresu}.</li>
-              <li>Wyślij go na testową bramkę JPK: https://test-e-dokumenty.mf.gov.pl. To jest plik JPK_V7M. Osobnego VAT-7 nie ma.</li>
+              <li>Kliknij „Wyślij JPK”. Program sam wysyła plik na testową bramkę. Swaggera nie otwierasz, tam nie ma formularza dla człowieka.</li>
+              <li>Jak bramka przyjmie plik, dostaniesz numer referencyjny i UPO. To jest test, nie prawdziwy urząd. Osobnego VAT-7 nie ma.</li>
               <li>Termin złożenia i zapłaty: {formatDaty(termin)}. {poTerminie ? "Ten termin już minął." : zostalo === 0 ? "Termin jest dzisiaj." : `Zostało ${zostalo} dni.`}</li>
               <li>
                 {rozliczenie.vat > 0

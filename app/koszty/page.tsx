@@ -96,7 +96,17 @@ export default function KosztyStrona() {
       setBlad(dane.blad || "Nie zapisano kosztu.");
       return;
     }
+    setDostawcaId("");
+    setRodzaj("kraj");
+    setDostawca("");
+    setIdentyfikator("");
+    setKraj("PL");
     setNumer("");
+    setOpis("");
+    setNetto("100");
+    setVatNaFakturze("23");
+    setData(DZIS);
+    setBledy({});
     wczytaj();
   }
 

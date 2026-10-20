@@ -102,9 +102,12 @@ export default function DaneFirmy() {
         </label>
         {pole("rachunek", "Rachunek bankowy", true)}
         {pole("kodUrzedu", "Kod urzędu skarbowego do JPK")}
+        {firma.rodzaj === "nierejestrowana" && pole("dataUrodzenia", "Data urodzenia RRRR-MM-DD")}
         {pole("mikrorachunek", "Mikrorachunek na CIT i VAT", true)}
       </div>
-      <p className="mt-2 text-xs text-atrament/60">Puste NIP na fakturze pokaże się jako „brak”. Mikrorachunek uzupełnisz, gdy spółka dostanie NIP.</p>
+      <p className="mt-2 text-xs text-atrament/60">
+        Puste NIP na fakturze pokaże się jako „brak”. Do testu JPK wstaw NIP 1111111111 i kod urzędu 1210 (Kraków-Podgórze). Spółka z o.o. w Krakowie często ma 1207. Data urodzenia jest potrzebna tylko przy działalności nierejestrowanej.
+      </p>
 
       <div className="mt-6 rounded-xl border border-linia bg-papier p-4 text-sm">
         <p>Obrót w {new Date().getFullYear()} bez proform: {pieniadze(obrotRoku(faktury, new Date().getFullYear()))} zł z {pieniadze(LIMIT_VAT)} zł.</p>

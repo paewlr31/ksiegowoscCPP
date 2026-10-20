@@ -29,6 +29,7 @@ export type Firma = {
   podstawaZwolnienia: string;
   kodUrzedu: string;
   mikrorachunek: string;
+  dataUrodzenia: string;
 };
 
 export type Nabywca = {
@@ -113,6 +114,7 @@ export function domyslnaFirma(): Firma {
     podstawaZwolnienia: PODSTAWA_ZWOLNIENIA,
     kodUrzedu: "",
     mikrorachunek: "",
+    dataUrodzenia: "",
   };
 }
 

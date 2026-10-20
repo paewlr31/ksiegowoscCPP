@@ -1,4 +1,5 @@
 import type { Firma, Nabywca, Pozycja, RodzajKosztu, TypFaktury } from "./typy";
+import { kodUrzeduPoprawny } from "./urzedy";
 
 export type Bledy = Record<string, string>;
 
@@ -62,7 +63,8 @@ export function bledyFirmy(firma: Firma): Bledy {
   if (firma.rodzaj === "spolka" && !firma.nip.trim()) bledy.nip = "Spółka musi mieć NIP z 10 cyfr.";
   else if (firma.nip.trim() && !nipPoprawny(firma.nip)) bledy.nip = "NIP ma 10 cyfr. Ostatnia to cyfra kontrolna.";
   if (!nrbPoprawny(firma.rachunek)) bledy.rachunek = "Rachunek ma 26 cyfr.";
-  if (firma.kodUrzedu.trim() && !/^\d{4}$/.test(firma.kodUrzedu.trim())) bledy.kodUrzedu = "Kod urzędu ma 4 cyfry.";
+  if (firma.kodUrzedu.trim() && !kodUrzeduPoprawny(firma.kodUrzedu)) bledy.kodUrzedu = "Nie ma takiego kodu urzędu. Kraków-Podgórze to 1210, spółki w Krakowie często mają 1207.";
+  if (firma.dataUrodzenia.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(firma.dataUrodzenia.trim())) bledy.dataUrodzenia = "Data urodzenia ma format RRRR-MM-DD.";
   if (firma.mikrorachunek.trim()) {
     const mikro = cyfry(firma.mikrorachunek);
     if (!nrbPoprawny(mikro) || !mikro.startsWith("10100071222", 2)) {
