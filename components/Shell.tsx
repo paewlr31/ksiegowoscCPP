@@ -8,6 +8,7 @@ const LINKI = [
   { href: "/", etykieta: "Dane firmy" },
   { href: "/faktury", etykieta: "Faktury" },
   { href: "/faktury/nowa", etykieta: "Wystaw fakturę" },
+  { href: "/koszty", etykieta: "Koszty" },
   { href: "/vat", etykieta: "VAT i JPK" },
   { href: "/cit", etykieta: "CIT" },
   { href: "/obowiazki", etykieta: "Obowiązki" },

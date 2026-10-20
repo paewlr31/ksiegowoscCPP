@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { neon } from "@neondatabase/serverless";
 import { firmaNaDzien } from "./podatki";
-import { domyslnaFirma, uzupelnijFirme, type Baza, type Faktura, type Firma } from "./typy";
+import { domyslnaFirma, uzupelnijFirme, type Baza, type Faktura, type Firma, type Koszt } from "./typy";
 
 const PLIK = path.join(process.cwd(), ".data", "baza.json");
 
@@ -36,9 +36,9 @@ async function wczytajPlik(): Promise<Baza> {
     const surowe = await fs.readFile(PLIK, "utf8");
     const dane = JSON.parse(surowe) as Baza;
     const faktury = dane.faktury ?? [];
-    return { firma: firmaNaDzien(uzupelnijFirme(dane.firma), faktury), faktury };
+    return { firma: firmaNaDzien(uzupelnijFirme(dane.firma), faktury), faktury, koszty: dane.koszty ?? [] };
   } catch {
-    return { firma: domyslnaFirma(), faktury: [] };
+    return { firma: domyslnaFirma(), faktury: [], koszty: [] };
   }
 }
 
@@ -55,8 +55,15 @@ export async function wczytajBaze(): Promise<Baza> {
   const fakturyWiersze = await sql`select dane from faktury order by utworzono desc`;
 
   const faktury = fakturyWiersze.map((wiersz) => jakoObiekt<Faktura>(wiersz.dane));
+  let koszty: Koszt[] = [];
+  try {
+    const kosztyWiersze = await sql`select dane from koszty order by utworzono desc`;
+    koszty = kosztyWiersze.map((wiersz) => jakoObiekt<Koszt>(wiersz.dane));
+  } catch {
+    throw new Error("W Neon nie ma tabeli koszty. W SQL Editor uruchom tworzenie tabeli koszty z pliku db/schema.sql.");
+  }
   const surowa = firmaWiersze[0] ? jakoObiekt<Firma>(firmaWiersze[0].dane) : domyslnaFirma();
-  return { firma: firmaNaDzien(surowa, faktury), faktury };
+  return { firma: firmaNaDzien(surowa, faktury), faktury, koszty };
 }
 
 export async function zapiszFirme(firma: Firma): Promise<void> {
@@ -73,6 +80,33 @@ export async function zapiszFirme(firma: Firma): Promise<void> {
     values (1, ${json}::jsonb)
     on conflict (id) do update set dane = excluded.dane
   `;
+}
+
+export async function zapiszKoszt(koszt: Koszt): Promise<void> {
+  const sql = klient();
+  if (!sql) {
+    const baza = await wczytajPlik();
+    baza.koszty = [koszt, ...baza.koszty.filter((k) => k.id !== koszt.id)];
+    await zapiszPlik(baza);
+    return;
+  }
+  const json = JSON.stringify(koszt);
+  await sql`
+    insert into koszty (id, dane, utworzono)
+    values (${koszt.id}, ${json}::jsonb, ${koszt.utworzono})
+    on conflict (id) do update set dane = excluded.dane
+  `;
+}
+
+export async function usunKoszt(id: string): Promise<void> {
+  const sql = klient();
+  if (!sql) {
+    const baza = await wczytajPlik();
+    baza.koszty = baza.koszty.filter((k) => k.id !== id);
+    await zapiszPlik(baza);
+    return;
+  }
+  await sql`delete from koszty where id = ${id}`;
 }
 
 export async function usunFakture(id: string): Promise<void> {

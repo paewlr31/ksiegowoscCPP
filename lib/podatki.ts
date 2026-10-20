@@ -1,4 +1,4 @@
-import { uzupelnijFirme, type Faktura, type Firma, type TypFaktury } from "./typy";
+import { uzupelnijFirme, type Faktura, type Firma, type Koszt, type RodzajKosztu, type TypFaktury } from "./typy";
 
 export const LIMIT_VAT = 200_000;
 
@@ -84,15 +84,52 @@ export function firmaNaDzien(firma: Firma, faktury: Faktura[], rok = new Date().
   return { ...uzupelniona, platnikVat: platnik };
 }
 
-export function rozliczenieMiesiaca(faktury: Faktura[], rok: number, miesiac: number, stawkaCit = 19) {
+export function policzKoszt(rodzaj: RodzajKosztu, netto: number, vatNaFakturze: number, platnikVat: boolean) {
+  const nettoGr = grosze(netto);
+  if (rodzaj === "kraj") {
+    const vatGr = grosze(vatNaFakturze);
+    if (platnikVat) return { vatNalezny: 0, vatNaliczony: zlote(vatGr), kosztCit: zlote(nettoGr) };
+    return { vatNalezny: 0, vatNaliczony: 0, kosztCit: zlote(nettoGr + vatGr) };
+  }
+  const vatPl = vatOdNettoGr(nettoGr, true);
+  if (platnikVat) return { vatNalezny: zlote(vatPl), vatNaliczony: zlote(vatPl), kosztCit: zlote(nettoGr) };
+  return { vatNalezny: zlote(vatPl), vatNaliczony: 0, kosztCit: zlote(nettoGr + vatPl) };
+}
+
+export function kosztyOkresu(koszty: Koszt[], rok: number, miesiac: number): Koszt[] {
+  const mm = String(miesiac).padStart(2, "0");
+  return koszty.filter((k) => k.data.startsWith(`${rok}-${mm}`));
+}
+
+export function rozliczenieMiesiaca(
+  faktury: Faktura[],
+  rok: number,
+  miesiac: number,
+  stawkaCit = 19,
+  koszty: Koszt[] = [],
+) {
   const dokumenty = fakturyOkresu(faktury, rok, miesiac);
+  const kosztyMiesiaca = kosztyOkresu(koszty, rok, miesiac);
   const nettoGr = dokumenty.reduce((s, f) => s + grosze(f.netto), 0);
-  const vatGr = dokumenty.reduce((s, f) => s + grosze(f.vat), 0);
+  const kosztGr = kosztyMiesiaca.reduce((s, k) => s + grosze(k.kosztCit), 0);
+  const dochodGr = nettoGr - kosztGr;
+  const vatSprzedazGr = dokumenty.reduce((s, f) => s + grosze(f.vat), 0);
+  const vatNaleznyGr = vatSprzedazGr + kosztyMiesiaca.reduce((s, k) => s + grosze(k.vatNalezny), 0);
+  const vatNaliczonyGr = kosztyMiesiaca.reduce((s, k) => s + grosze(k.vatNaliczony), 0);
+  const roznicaGr = vatNaleznyGr - vatNaliczonyGr;
   return {
     dokumenty,
+    koszty: kosztyMiesiaca,
     netto: zlote(nettoGr),
-    vat: zlote(vatGr),
-    cit: zlote(citOdPrzychoduGr(nettoGr, stawkaCit)),
+    kosztyCit: zlote(kosztGr),
+    dochod: zlote(dochodGr),
+    cit: zlote(citOdPrzychoduGr(dochodGr, stawkaCit)),
+    vatNalezny: zlote(vatNaleznyGr),
+    vatNaliczony: zlote(vatNaliczonyGr),
+    vat: zlote(Math.max(0, roznicaGr)),
+    nadwyzka: zlote(Math.max(0, -roznicaGr)),
+    importUe: kosztyMiesiaca.filter((k) => k.rodzaj === "ue"),
+    importPozaUe: kosztyMiesiaca.filter((k) => k.rodzaj === "poza_ue"),
   };
 }
 

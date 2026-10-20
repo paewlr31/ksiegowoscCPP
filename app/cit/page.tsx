@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Faktura, Firma } from "@/lib/typy";
+import type { Faktura, Firma, Koszt } from "@/lib/typy";
 import { dniDo, formatDaty, pieniadze, procentCit, rozliczenieMiesiaca, terminPoOkresie } from "@/lib/podatki";
 
 export default function CitStrona() {
   const teraz = new Date();
   const [firma, setFirma] = useState<Firma | null>(null);
   const [faktury, setFaktury] = useState<Faktura[]>([]);
+  const [koszty, setKoszty] = useState<Koszt[]>([]);
   const [rok, setRok] = useState(teraz.getMonth() === 0 ? teraz.getFullYear() - 1 : teraz.getFullYear());
   const [miesiac, setMiesiac] = useState(teraz.getMonth() === 0 ? 12 : teraz.getMonth());
   const [mikrorachunek, setMikrorachunek] = useState("");
@@ -16,18 +17,20 @@ export default function CitStrona() {
     Promise.all([
       fetch("/api/firma").then((r) => r.json()),
       fetch("/api/faktury").then((r) => r.json()),
+      fetch("/api/koszty").then((r) => r.json()),
       fetch("/api/status").then((r) => r.json()),
-    ]).then(([f, lista, status]) => {
+    ]).then(([f, lista, kosztyLista, status]) => {
       setFirma(f);
       setFaktury(Array.isArray(lista) ? lista : []);
+      setKoszty(Array.isArray(kosztyLista) ? kosztyLista : []);
       setMikrorachunek(f.mikrorachunek || status.mikrorachunek || "");
     });
   }, []);
 
   const stawka = firma ? procentCit(firma) : 0;
   const rozliczenie = useMemo(
-    () => rozliczenieMiesiaca(faktury, rok, miesiac, stawka),
-    [faktury, rok, miesiac, stawka],
+    () => rozliczenieMiesiaca(faktury, rok, miesiac, stawka, koszty),
+    [faktury, rok, miesiac, stawka, koszty],
   );
   const termin = terminPoOkresie(rok, miesiac, 20);
   const zostalo = dniDo(termin);
@@ -61,7 +64,9 @@ export default function CitStrona() {
       <section className="rounded-2xl border border-linia bg-karta p-5">
         <p className="text-sm">Szacunek zaliczki CIT za {nazwaOkresu}</p>
         <p className="font-serif text-4xl">{pieniadze(rozliczenie.cit)} zł</p>
-        <p className="mt-2 text-sm">Przychód netto z faktur: {pieniadze(rozliczenie.netto)} zł. Stawka {stawka}%. Proformy pominięte. Bez kosztów.</p>
+        <p className="mt-2 text-sm">
+          Przychód {pieniadze(rozliczenie.netto)} zł, koszty {pieniadze(rozliczenie.kosztyCit)} zł, dochód {pieniadze(rozliczenie.dochod)} zł. Stawka {stawka}%.
+        </p>
         <p className="mt-1 text-sm">
           Termin przelewu: {formatDaty(termin)}. {zostalo < 0 ? "Termin minął." : zostalo === 0 ? "Termin jest dzisiaj." : `Zostało ${zostalo} dni.`}
         </p>
@@ -78,7 +83,7 @@ export default function CitStrona() {
             Symbol: CIT. Okres: {nazwaOkresu}. To ten sam numer co przy VAT. Inny jest tylko symbol.
           </li>
           <li>Raz w roku, do 31 marca, spółka składa zeznanie CIT-8 na bramce e-Deklaracji i dopłaca różnicę symbolem CIT-8. Tego XML-a program złoży później, razem z księgą.</li>
-          <li>To jest szacunek od wystawionych faktur. Nie ma w nim kosztów, więc prawdziwa zaliczka spółki może być niższa.</li>
+          <li>Zaliczka jest od dochodu: przychód z faktur minus koszty wpisane w zakładce Koszty. Proform nie ma w przychodzie.</li>
         </ol>
       </details>
 
@@ -87,7 +92,13 @@ export default function CitStrona() {
         {rozliczenie.dokumenty.map((f) => (
           <li key={f.id} className="flex justify-between px-4 py-3 text-sm">
             <span>{f.numer}</span>
-            <span>netto {pieniadze(f.netto)} zł</span>
+            <span>przychód {pieniadze(f.netto)} zł</span>
+          </li>
+        ))}
+        {rozliczenie.koszty.map((k) => (
+          <li key={k.id} className="flex justify-between px-4 py-3 text-sm">
+            <span>{k.dostawca} · {k.numer}</span>
+            <span>koszt {pieniadze(k.kosztCit)} zł</span>
           </li>
         ))}
       </ul>

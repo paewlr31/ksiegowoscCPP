@@ -12,3 +12,11 @@ create table if not exists faktury (
   dane jsonb not null,
   utworzono timestamptz not null default now()
 );
+
+create table if not exists koszty (
+  id text primary key,
+  dane jsonb not null,
+  utworzono timestamptz not null default now()
+);
+
+alter table koszty enable row level security;

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Faktura, Firma } from "@/lib/typy";
+import type { Faktura, Firma, Koszt } from "@/lib/typy";
 import { dniDo, formatDaty, pieniadze, rozliczenieMiesiaca, terminPoOkresie } from "@/lib/podatki";
 
 export default function VatStrona() {
   const teraz = new Date();
   const [firma, setFirma] = useState<Firma | null>(null);
   const [faktury, setFaktury] = useState<Faktura[]>([]);
+  const [koszty, setKoszty] = useState<Koszt[]>([]);
   const [rok, setRok] = useState(teraz.getMonth() === 0 ? teraz.getFullYear() - 1 : teraz.getFullYear());
   const [miesiac, setMiesiac] = useState(teraz.getMonth() === 0 ? 12 : teraz.getMonth());
   const [mikrorachunek, setMikrorachunek] = useState("");
@@ -16,17 +17,19 @@ export default function VatStrona() {
     Promise.all([
       fetch("/api/firma").then((r) => r.json()),
       fetch("/api/faktury").then((r) => r.json()),
+      fetch("/api/koszty").then((r) => r.json()),
       fetch("/api/status").then((r) => r.json()),
-    ]).then(([f, lista, status]) => {
+    ]).then(([f, lista, kosztyLista, status]) => {
       setFirma(f);
       setFaktury(Array.isArray(lista) ? lista : []);
+      setKoszty(Array.isArray(kosztyLista) ? kosztyLista : []);
       setMikrorachunek(f.mikrorachunek || status.mikrorachunek || "");
     });
   }, []);
 
   const rozliczenie = useMemo(
-    () => rozliczenieMiesiaca(faktury, rok, miesiac),
-    [faktury, rok, miesiac],
+    () => rozliczenieMiesiaca(faktury, rok, miesiac, 0, koszty),
+    [faktury, rok, miesiac, koszty],
   );
   const termin = terminPoOkresie(rok, miesiac, 25);
   const zostalo = dniDo(termin);
@@ -49,7 +52,7 @@ export default function VatStrona() {
         </label>
       </div>
 
-      {!firma?.platnikVat && (
+      {!firma?.platnikVat && rozliczenie.importUe.length === 0 && rozliczenie.importPozaUe.length === 0 && (
         <div className="rounded-2xl border border-mosiadz/40 bg-karta p-5">
           <p className="font-medium">Nie jesteś płatnikiem VAT.</p>
           <p className="mt-2 text-sm leading-relaxed">
@@ -59,12 +62,16 @@ export default function VatStrona() {
         </div>
       )}
 
-      {firma?.platnikVat && (
+      {(firma?.platnikVat || rozliczenie.importUe.length > 0 || rozliczenie.importPozaUe.length > 0) && (
         <>
           <section className={`rounded-2xl border p-5 ${poTerminie ? "border-burak bg-burak/5" : "border-linia bg-karta"}`}>
             <p className="text-sm">Za {nazwaOkresu} masz zapłacić VAT</p>
             <p className="font-serif text-4xl">{pieniadze(rozliczenie.vat)} zł</p>
             <p className="mt-2 text-sm">
+              Należny {pieniadze(rozliczenie.vatNalezny)} zł, odliczenie {pieniadze(rozliczenie.vatNaliczony)} zł
+              {rozliczenie.nadwyzka ? `, nadwyżka ${pieniadze(rozliczenie.nadwyzka)} zł na następny miesiąc` : ""}.
+            </p>
+            <p className="mt-1 text-sm">
               Termin: {formatDaty(termin)}.{" "}
               {poTerminie
                 ? `Za okres ${nazwaOkresu} trzeba już złożyć JPK i zapłacić.`
@@ -78,8 +85,14 @@ export default function VatStrona() {
             >
               Pobierz XML JPK_V7M za {nazwaOkresu}
             </a>
-            {!firma.nip && <p className="mt-2 text-sm text-burak">W danych firmy nie ma NIP. Dopisz go, zanim wyślesz plik.</p>}
-            {!firma.kodUrzedu && <p className="mt-1 text-sm text-burak">W danych firmy nie ma kodu urzędu. Bez niego bramka pliku nie przyjmie.</p>}
+            {!firma?.nip && <p className="mt-2 text-sm text-burak">W danych firmy nie ma NIP. Dopisz go, zanim wyślesz plik.</p>}
+            {!firma?.kodUrzedu && <p className="mt-1 text-sm text-burak">W danych firmy nie ma kodu urzędu. Bez niego bramka pliku nie przyjmie.</p>}
+            {rozliczenie.importUe.length > 0 && (
+              <p className="mt-3 text-sm">
+                W tym miesiącu jest import usług z Unii ({rozliczenie.importUe.map((k) => `${k.dostawca} ${pieniadze(k.netto)} zł`).join(", ")}).
+                Oprócz JPK złóż informację VAT-UE do 25. na bramce e-Deklaracji. Cursora i innych spoza Unii w VAT-UE nie ma.
+              </p>
+            )}
           </section>
 
           <details className="rounded-2xl border border-linia bg-karta p-5">

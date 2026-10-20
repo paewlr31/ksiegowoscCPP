@@ -63,9 +63,29 @@ export type Faktura = {
   utworzono: string;
 };
 
+export type RodzajKosztu = "kraj" | "ue" | "poza_ue";
+
+export type Koszt = {
+  id: string;
+  data: string;
+  numer: string;
+  dostawca: string;
+  identyfikator: string;
+  kraj: string;
+  rodzaj: RodzajKosztu;
+  opis: string;
+  netto: number;
+  vatNaFakturze: number;
+  vatNalezny: number;
+  vatNaliczony: number;
+  kosztCit: number;
+  utworzono: string;
+};
+
 export type Baza = {
   firma: Firma;
   faktury: Faktura[];
+  koszty: Koszt[];
 };
 
 export const ETYKIETA: Record<TypFaktury, string> = {
