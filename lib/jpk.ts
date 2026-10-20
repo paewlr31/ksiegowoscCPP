@@ -57,7 +57,7 @@ function znacznikSprzedazy(faktura: Faktura): string {
   return "<OFF>1</OFF>";
 }
 
-export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: number, miesiac: number): string {
+export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: number, miesiac: number, cel: 1 | 2 = 1, powod = ""): string {
   const sprzedaż = fakturyOkresu(faktury, rok, miesiac).filter((f) => f.vat !== 0 || f.platnikVat);
   const kosztyMiesiaca = kosztyOkresu(koszty, rok, miesiac);
   const importy = kosztyMiesiaca.filter((k) => k.rodzaj !== "kraj" && k.vatNalezny !== 0);
@@ -123,7 +123,7 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
     <WariantFormularza>3</WariantFormularza>
     <DataWytworzeniaJPK>${teraz}</DataWytworzeniaJPK>
     <NazwaSystemu>Ksiegowosc CPP</NazwaSystemu>
-    <CelZlozenia poz="P_7">1</CelZlozenia>
+    <CelZlozenia poz="P_7">${cel}</CelZlozenia>
     <KodUrzedu>${x(firma.kodUrzedu.trim() || "0000")}</KodUrzedu>
     <Rok>${rok}</Rok>
     <Miesiac>${miesiac}</Miesiac>
@@ -146,6 +146,7 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
       ${z48 ? `<P_48>${z48}</P_48>` : ""}
       <P_51>${z51}</P_51>
       ${z62 ? `<P_62>${z62}</P_62>` : ""}
+      ${cel === 2 ? `<P_ORDZU>${x(powod.trim() || "Korekta danych")}</P_ORDZU>` : ""}
     </PozycjeSzczegolowe>
     <Pouczenia>1</Pouczenia>
   </Deklaracja>

@@ -83,10 +83,23 @@ export type Koszt = {
   utworzono: string;
 };
 
+export type WysylkaJpk = {
+  id: string;
+  rok: number;
+  miesiac: number;
+  cel: 1 | 2;
+  numerReferencyjny: string;
+  kod: number;
+  opis: string;
+  upo: string;
+  utworzono: string;
+};
+
 export type Baza = {
   firma: Firma;
   faktury: Faktura[];
   koszty: Koszt[];
+  wysylki: WysylkaJpk[];
 };
 
 export const ETYKIETA: Record<TypFaktury, string> = {

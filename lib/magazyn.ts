@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { neon } from "@neondatabase/serverless";
 import { firmaNaDzien } from "./podatki";
-import { domyslnaFirma, uzupelnijFirme, type Baza, type Faktura, type Firma, type Koszt } from "./typy";
+import { domyslnaFirma, uzupelnijFirme, type Baza, type Faktura, type Firma, type Koszt, type WysylkaJpk } from "./typy";
 
 const PLIK = path.join(process.cwd(), ".data", "baza.json");
 
@@ -36,9 +36,14 @@ async function wczytajPlik(): Promise<Baza> {
     const surowe = await fs.readFile(PLIK, "utf8");
     const dane = JSON.parse(surowe) as Baza;
     const faktury = dane.faktury ?? [];
-    return { firma: firmaNaDzien(uzupelnijFirme(dane.firma), faktury), faktury, koszty: dane.koszty ?? [] };
+    return {
+      firma: firmaNaDzien(uzupelnijFirme(dane.firma), faktury),
+      faktury,
+      koszty: dane.koszty ?? [],
+      wysylki: dane.wysylki ?? [],
+    };
   } catch {
-    return { firma: domyslnaFirma(), faktury: [], koszty: [] };
+    return { firma: domyslnaFirma(), faktury: [], koszty: [], wysylki: [] };
   }
 }
 
@@ -63,7 +68,29 @@ export async function wczytajBaze(): Promise<Baza> {
     throw new Error("W Neon nie ma tabeli koszty. W SQL Editor uruchom tworzenie tabeli koszty z pliku db/schema.sql.");
   }
   const surowa = firmaWiersze[0] ? jakoObiekt<Firma>(firmaWiersze[0].dane) : domyslnaFirma();
-  return { firma: firmaNaDzien(surowa, faktury), faktury, koszty };
+  const wysylki = await wczytajWysylkiSql(sql);
+  return { firma: firmaNaDzien(surowa, faktury), faktury, koszty, wysylki };
+}
+
+type Sql = Exclude<ReturnType<typeof klient>, null>;
+
+async function zapewnijWysylki(sql: Sql) {
+  await sql`create table if not exists wysylki (
+    id text primary key,
+    dane jsonb not null,
+    utworzono timestamptz not null default now()
+  )`;
+}
+
+async function wczytajWysylkiSql(sql: Sql): Promise<WysylkaJpk[]> {
+  try {
+    const wiersze = await sql`select dane from wysylki order by utworzono desc`;
+    return wiersze.map((wiersz) => jakoObiekt<WysylkaJpk>(wiersz.dane));
+  } catch {
+    await zapewnijWysylki(sql);
+    const wiersze = await sql`select dane from wysylki order by utworzono desc`;
+    return wiersze.map((wiersz) => jakoObiekt<WysylkaJpk>(wiersz.dane));
+  }
 }
 
 export async function zapiszFirme(firma: Firma): Promise<void> {
@@ -94,6 +121,23 @@ export async function zapiszKoszt(koszt: Koszt): Promise<void> {
   await sql`
     insert into koszty (id, dane, utworzono)
     values (${koszt.id}, ${json}::jsonb, ${koszt.utworzono})
+    on conflict (id) do update set dane = excluded.dane
+  `;
+}
+
+export async function zapiszWysylke(wysylka: WysylkaJpk): Promise<void> {
+  const sql = klient();
+  if (!sql) {
+    const baza = await wczytajPlik();
+    baza.wysylki = [wysylka, ...baza.wysylki.filter((w) => w.numerReferencyjny !== wysylka.numerReferencyjny)];
+    await zapiszPlik(baza);
+    return;
+  }
+  await zapewnijWysylki(sql);
+  const json = JSON.stringify(wysylka);
+  await sql`
+    insert into wysylki (id, dane, utworzono)
+    values (${wysylka.id}, ${json}::jsonb, ${wysylka.utworzono})
     on conflict (id) do update set dane = excluded.dane
   `;
 }

@@ -20,3 +20,11 @@ create table if not exists koszty (
 );
 
 alter table koszty enable row level security;
+
+create table if not exists wysylki (
+  id text primary key,
+  dane jsonb not null,
+  utworzono timestamptz not null default now()
+);
+
+alter table wysylki enable row level security;

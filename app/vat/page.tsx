@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Faktura, Firma, Koszt } from "@/lib/typy";
+import type { Faktura, Firma, Koszt, WysylkaJpk } from "@/lib/typy";
 import { dniDo, formatDaty, pieniadze, rozliczenieMiesiaca, terminPoOkresie } from "@/lib/podatki";
 import { czytajUpo, formatujWplyw } from "@/lib/upo";
 
@@ -16,6 +16,9 @@ export default function VatStrona() {
   const [wysylka, setWysylka] = useState("");
   const [trwa, setTrwa] = useState(false);
   const [upo, setUpo] = useState("");
+  const [wysylki, setWysylki] = useState<WysylkaJpk[]>([]);
+  const [powod, setPowod] = useState("Korekta danych");
+  const [korektaRecznie, setKorektaRecznie] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -23,11 +26,13 @@ export default function VatStrona() {
       fetch("/api/faktury").then((r) => r.json()),
       fetch("/api/koszty").then((r) => r.json()),
       fetch("/api/status").then((r) => r.json()),
-    ]).then(([f, lista, kosztyLista, status]) => {
+      fetch("/api/jpk/wysylki").then((r) => r.json()),
+    ]).then(([f, lista, kosztyLista, status, historia]) => {
       setFirma(f);
       setFaktury(Array.isArray(lista) ? lista : []);
       setKoszty(Array.isArray(kosztyLista) ? kosztyLista : []);
       setMikrorachunek(f.mikrorachunek || status.mikrorachunek || "");
+      setWysylki(Array.isArray(historia) ? historia : []);
     });
   }, []);
 
@@ -42,6 +47,9 @@ export default function VatStrona() {
   const jestImport = rozliczenie.importUe.length > 0 || rozliczenie.importPozaUe.length > 0;
   const trzebaJpk = Boolean(firma?.platnikVat) || jestImport;
   const potwierdzenie = upo ? czytajUpo(upo) : null;
+  const historiaMiesiaca = wysylki.filter((w) => w.rok === rok && w.miesiac === miesiac && w.kod === 200);
+  const cel = historiaMiesiaca.length > 0 || korektaRecznie ? 2 : 1;
+  const ostatnia = historiaMiesiaca[0];
 
   async function wyslij() {
     setTrwa(true);
@@ -50,7 +58,7 @@ export default function VatStrona() {
     const odpowiedz = await fetch("/api/jpk/wyslij", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rok, miesiac }),
+      body: JSON.stringify({ rok, miesiac, cel, powod }),
     });
     let dane = await odpowiedz.json();
     if (!odpowiedz.ok) {
@@ -72,6 +80,8 @@ export default function VatStrona() {
     if (dane.kod === 200) {
       setWysylka(`Bramka testowa przyjęła JPK za ${nazwaOkresu}. Numer referencyjny: ${dane.numerReferencyjny}. To nie jest prawdziwy urząd, przelewu z tego testu nie rób.`);
       setUpo(dane.upo || "");
+      const historia = await fetch("/api/jpk/wysylki").then((r) => r.json());
+      setWysylki(Array.isArray(historia) ? historia : []);
     } else {
       setWysylka(dane.opis || dane.blad || `Bramka zwróciła kod ${dane.kod}. Numer ${dane.numerReferencyjny || ""}.`);
       setUpo("");
@@ -82,7 +92,18 @@ export default function VatStrona() {
   async function otworzPlik(plik: File) {
     const tekst = await plik.text();
     setUpo(tekst);
-    setWysylka(czytajUpo(tekst) ? "" : "W tym pliku nie ma potwierdzenia. Wybierz XML pobrany przyciskiem UPO.");
+    if (!czytajUpo(tekst)) {
+      setWysylka("W tym pliku nie ma potwierdzenia. Wybierz XML pobrany przyciskiem UPO.");
+      return;
+    }
+    setWysylka("");
+    await fetch("/api/jpk/wysylki", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ upo: tekst }),
+    });
+    const historia = await fetch("/api/jpk/wysylki").then((r) => r.json());
+    setWysylki(Array.isArray(historia) ? historia : []);
   }
 
   function pobierzUpo() {
@@ -141,11 +162,22 @@ export default function VatStrona() {
                   ? "Termin jest dzisiaj."
                   : `Zostało ${zostalo} dni.`}
             </p>
+            {cel === 2 && (
+              <label className="pole mt-4">Co poprawiasz
+                <input className="mt-1" value={powod} onChange={(e) => setPowod(e.target.value)} />
+              </label>
+            )}
+            {historiaMiesiaca.length === 0 && (
+              <label className="mt-4 flex items-center gap-2 text-sm">
+                <input className="w-auto" type="checkbox" checked={korektaRecznie} onChange={(e) => setKorektaRecznie(e.target.checked)} />
+                Ten miesiąc już poszedł na bramkę. Wyślij korektę.
+              </label>
+            )}
             <div className="mt-4 flex flex-wrap gap-3">
               <button type="button" className="rounded-lg bg-las px-4 py-2 text-sm text-white disabled:opacity-60" disabled={trwa} onClick={wyslij}>
-                {trwa ? "Wysyłam..." : `Wyślij JPK_V7M za ${nazwaOkresu} na bramkę testową`}
+                {trwa ? "Wysyłam..." : cel === 2 ? `Wyślij korektę JPK za ${nazwaOkresu}` : `Wyślij JPK_V7M za ${nazwaOkresu} na bramkę testową`}
               </button>
-              <a className="rounded-lg border border-linia px-4 py-2 text-sm" href={`/api/jpk?rok=${rok}&miesiac=${miesiac}`}>
+              <a className="rounded-lg border border-linia px-4 py-2 text-sm" href={`/api/jpk?rok=${rok}&miesiac=${miesiac}&cel=${cel}&powod=${encodeURIComponent(powod)}`}>
                 Pobierz XML
               </a>
               <label className="cursor-pointer rounded-lg border border-linia px-4 py-2 text-sm">
@@ -161,13 +193,23 @@ export default function VatStrona() {
                 </button>
               )}
             </div>
+            {ostatnia && (
+              <div className="mt-4 rounded-xl border border-las/40 bg-papier p-4">
+                <p className="text-sm text-atrament/70">Numer referencyjny {ostatnia.cel === 2 ? "korekty" : "złożenia"} za {nazwaOkresu}</p>
+                <p className="mt-1 break-all font-mono text-lg">{ostatnia.numerReferencyjny}</p>
+                <p className="mt-2 text-sm">To jest te 32 znaki. Wklej je na stronie statusu, żeby sprawdzić, czy bramka naprawdę przyjęła plik.</p>
+                <a className="mt-2 inline-block text-sm text-las underline" href={`https://e-mikrofirma.mf.gov.pl/jpk-client/status?referenceNumber=${ostatnia.numerReferencyjny}`} target="_blank" rel="noreferrer">
+                  Sprawdź status w Klient JPK_WEB
+                </a>
+              </div>
+            )}
             {wysylka && <p className="mt-3 text-sm leading-relaxed">{wysylka}</p>}
             {potwierdzenie && (
               <div className="mt-4 rounded-xl border border-las/30 bg-papier p-4 text-sm">
                 <p className="font-medium">{potwierdzenie.przyjeto ? "Bramka przyjęła plik." : "Bramka nie przyjęła pliku."}</p>
                 <dl className="mt-3 grid gap-2 sm:grid-cols-2">
                   <div><dt className="text-atrament/60">Kto przyjął</dt><dd>{potwierdzenie.kto}</dd></div>
-                  <div><dt className="text-atrament/60">Numer referencyjny</dt><dd className="break-all">{potwierdzenie.numer}</dd></div>
+                  <div className="sm:col-span-2"><dt className="text-atrament/60">Numer referencyjny, 32 znaki</dt><dd className="break-all font-mono text-base">{potwierdzenie.numer}</dd></div>
                   <div><dt className="text-atrament/60">Formularz</dt><dd>{potwierdzenie.formularz}</dd></div>
                   <div><dt className="text-atrament/60">Okres</dt><dd>{potwierdzenie.miesiac.padStart(2, "0")}.{potwierdzenie.rok}</dd></div>
                   <div><dt className="text-atrament/60">NIP</dt><dd>{potwierdzenie.nip}</dd></div>
@@ -192,7 +234,7 @@ export default function VatStrona() {
             <summary className="cursor-pointer font-medium">Gdzie złożyć i jak zapłacić</summary>
             <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed">
               <li>Kliknij „Wyślij JPK”. Program sam wysyła plik na testową bramkę. Swaggera nie otwierasz, tam nie ma formularza dla człowieka.</li>
-              <li>Jak bramka przyjmie plik, dostaniesz numer referencyjny i UPO. To jest test, nie prawdziwy urząd. Osobnego VAT-7 nie ma.</li>
+              <li>Jak bramka przyjmie plik, numer referencyjny zostaje na tej stronie. Ma 32 znaki i jest w UPO w polu NumerReferencyjny. Wklejasz go w Klient JPK_WEB, żeby zobaczyć status 200. Jak coś poprawisz po wysyłce, wyślij korektę, nie drugi raz zwykły plik.</li>
               <li>Termin złożenia i zapłaty: {formatDaty(termin)}. {poTerminie ? "Ten termin już minął." : zostalo === 0 ? "Termin jest dzisiaj." : `Zostało ${zostalo} dni.`}</li>
               <li>
                 {rozliczenie.vat > 0

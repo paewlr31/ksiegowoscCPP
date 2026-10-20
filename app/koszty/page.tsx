@@ -29,6 +29,7 @@ export default function KosztyStrona() {
   const [blad, setBlad] = useState("");
   const [bledy, setBledy] = useState<Bledy>({});
   const [dostawcaId, setDostawcaId] = useState("");
+  const [edytowanyId, setEdytowanyId] = useState("");
 
   function wczytaj() {
     return Promise.all([fetch("/api/firma").then((r) => r.json()), fetch("/api/koszty").then((r) => r.json())]).then(
@@ -62,6 +63,37 @@ export default function KosztyStrona() {
     setVatNaFakturze(znaleziony.rodzaj === "kraj" ? (Number(netto) * 0.23).toFixed(2) : "0");
   }
 
+  function wyczysc() {
+    setEdytowanyId("");
+    setDostawcaId("");
+    setRodzaj("kraj");
+    setDostawca("");
+    setIdentyfikator("");
+    setKraj("PL");
+    setNumer("");
+    setOpis("");
+    setNetto("100");
+    setVatNaFakturze("23");
+    setData(DZIS);
+    setBledy({});
+  }
+
+  function popraw(koszt: Koszt) {
+    setEdytowanyId(koszt.id);
+    setRodzaj(koszt.rodzaj);
+    setDostawca(koszt.dostawca);
+    setIdentyfikator(koszt.identyfikator);
+    setKraj(koszt.kraj);
+    setNumer(koszt.numer);
+    setData(koszt.data);
+    setOpis(koszt.opis);
+    setNetto(String(koszt.netto));
+    setVatNaFakturze(String(koszt.vatNaFakturze));
+    setDostawcaId(DOSTAWCY.find((d) => d.identyfikator && d.identyfikator === koszt.identyfikator)?.id ?? "");
+    setBlad("");
+    setBledy({});
+  }
+
   async function zapisz(e: React.FormEvent) {
     e.preventDefault();
     setBlad("");
@@ -76,8 +108,8 @@ export default function KosztyStrona() {
     });
     setBledy(znalezione);
     if (Object.keys(znalezione).length) return;
-    const odpowiedz = await fetch("/api/koszty", {
-      method: "POST",
+    const odpowiedz = await fetch(edytowanyId ? `/api/koszty/${edytowanyId}` : "/api/koszty", {
+      method: edytowanyId ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         rodzaj,
@@ -96,17 +128,7 @@ export default function KosztyStrona() {
       setBlad(dane.blad || "Nie zapisano kosztu.");
       return;
     }
-    setDostawcaId("");
-    setRodzaj("kraj");
-    setDostawca("");
-    setIdentyfikator("");
-    setKraj("PL");
-    setNumer("");
-    setOpis("");
-    setNetto("100");
-    setVatNaFakturze("23");
-    setData(DZIS);
-    setBledy({});
+    wyczysc();
     wczytaj();
   }
 
@@ -116,6 +138,7 @@ export default function KosztyStrona() {
         <div>
           <h1 className="font-serif text-4xl">Koszty</h1>
           <p className="mt-1 text-sm text-atrament/70">OLX i Oferteo są krajowe. Google Ads jest z Unii. Cursor jest spoza Unii.</p>
+          {edytowanyId && <p className="mt-2 text-sm">Poprawiasz zapisany koszt. Jak JPK za ten miesiąc już poszedł, następną wysyłkę zrób jako korektę.</p>}
         </div>
         <label className="pole">Znany dostawca
           <select className="mt-1" value={dostawcaId} onChange={(e) => wybierzDostawce(e.target.value)}>
@@ -179,7 +202,10 @@ export default function KosztyStrona() {
           )}
         </div>
         {blad && <p className="rounded-lg bg-burak/10 px-3 py-2 text-sm text-burak">{blad}</p>}
-        <button className="rounded-lg bg-las px-4 py-2 text-white">Zapisz koszt</button>
+        <div className="flex gap-3">
+          <button className="rounded-lg bg-las px-4 py-2 text-white">{edytowanyId ? "Zapisz poprawkę" : "Zapisz koszt"}</button>
+          {edytowanyId && <button type="button" className="rounded-lg border border-linia px-4 py-2 text-sm" onClick={wyczysc}>Anuluj</button>}
+        </div>
       </form>
 
       <aside className="space-y-4">
@@ -204,16 +230,20 @@ export default function KosztyStrona() {
               </span>
               <span className="text-right">
                 <span className="block">{pieniadze(k.kosztCit)} zł CIT</span>
-                <button
-                  type="button"
-                  className="text-xs text-burak"
-                  onClick={async () => {
-                    await fetch(`/api/koszty/${k.id}`, { method: "DELETE" });
-                    wczytaj();
-                  }}
-                >
-                  Usuń
-                </button>
+                <span className="mt-1 flex justify-end gap-3">
+                  <button type="button" className="text-xs text-las" onClick={() => popraw(k)}>Edytuj</button>
+                  <button
+                    type="button"
+                    className="text-xs text-burak"
+                    onClick={async () => {
+                      await fetch(`/api/koszty/${k.id}`, { method: "DELETE" });
+                      if (edytowanyId === k.id) wyczysc();
+                      wczytaj();
+                    }}
+                  >
+                    Usuń
+                  </button>
+                </span>
               </span>
             </li>
           ))}

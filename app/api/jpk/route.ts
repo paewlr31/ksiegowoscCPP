@@ -15,7 +15,9 @@ export async function GET(zadanie: Request) {
   if (!baza.firma.platnikVat && !importUslug) {
     return NextResponse.json({ blad: "W tym miesiącu nie ma JPK. Nie jesteś płatnikiem VAT i nie było importu usług." }, { status: 400 });
   }
-  const xml = jpkV7m(baza.firma, baza.faktury, baza.koszty, rok, miesiac);
+  const cel = url.searchParams.get("cel") === "2" ? 2 : 1;
+  const powod = url.searchParams.get("powod") ?? "";
+  const xml = jpkV7m(baza.firma, baza.faktury, baza.koszty, rok, miesiac, cel, powod);
   const nazwa = `JPK_V7M_${rok}_${String(miesiac).padStart(2, "0")}.xml`;
   return new NextResponse(xml, {
     headers: {
