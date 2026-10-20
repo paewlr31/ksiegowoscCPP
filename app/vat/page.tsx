@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Faktura, Firma, Koszt } from "@/lib/typy";
 import { dniDo, formatDaty, pieniadze, rozliczenieMiesiaca, terminPoOkresie } from "@/lib/podatki";
+import { czytajUpo, formatujWplyw } from "@/lib/upo";
 
 export default function VatStrona() {
   const teraz = new Date();
@@ -40,6 +41,7 @@ export default function VatStrona() {
   const nazwaOkresu = `${String(miesiac).padStart(2, "0")}.${rok}`;
   const jestImport = rozliczenie.importUe.length > 0 || rozliczenie.importPozaUe.length > 0;
   const trzebaJpk = Boolean(firma?.platnikVat) || jestImport;
+  const potwierdzenie = upo ? czytajUpo(upo) : null;
 
   async function wyslij() {
     setTrwa(true);
@@ -75,6 +77,12 @@ export default function VatStrona() {
       setUpo("");
     }
     setTrwa(false);
+  }
+
+  async function otworzPlik(plik: File) {
+    const tekst = await plik.text();
+    setUpo(tekst);
+    setWysylka(czytajUpo(tekst) ? "" : "W tym pliku nie ma potwierdzenia. Wybierz XML pobrany przyciskiem UPO.");
   }
 
   function pobierzUpo() {
@@ -140,13 +148,36 @@ export default function VatStrona() {
               <a className="rounded-lg border border-linia px-4 py-2 text-sm" href={`/api/jpk?rok=${rok}&miesiac=${miesiac}`}>
                 Pobierz XML
               </a>
+              <label className="cursor-pointer rounded-lg border border-linia px-4 py-2 text-sm">
+                Otwórz pobrane UPO
+                <input className="hidden" type="file" accept=".xml,text/xml" onChange={(e) => {
+                  const plik = e.target.files?.[0];
+                  if (plik) otworzPlik(plik);
+                }} />
+              </label>
               {upo && (
                 <button type="button" className="rounded-lg border border-linia px-4 py-2 text-sm" onClick={pobierzUpo}>
-                  Pobierz UPO
+                  Zapisz plik UPO
                 </button>
               )}
             </div>
             {wysylka && <p className="mt-3 text-sm leading-relaxed">{wysylka}</p>}
+            {potwierdzenie && (
+              <div className="mt-4 rounded-xl border border-las/30 bg-papier p-4 text-sm">
+                <p className="font-medium">{potwierdzenie.przyjeto ? "Bramka przyjęła plik." : "Bramka nie przyjęła pliku."}</p>
+                <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div><dt className="text-atrament/60">Kto przyjął</dt><dd>{potwierdzenie.kto}</dd></div>
+                  <div><dt className="text-atrament/60">Numer referencyjny</dt><dd className="break-all">{potwierdzenie.numer}</dd></div>
+                  <div><dt className="text-atrament/60">Formularz</dt><dd>{potwierdzenie.formularz}</dd></div>
+                  <div><dt className="text-atrament/60">Okres</dt><dd>{potwierdzenie.miesiac.padStart(2, "0")}.{potwierdzenie.rok}</dd></div>
+                  <div><dt className="text-atrament/60">NIP</dt><dd>{potwierdzenie.nip}</dd></div>
+                  <div><dt className="text-atrament/60">Kod urzędu</dt><dd>{potwierdzenie.urzad}</dd></div>
+                  <div><dt className="text-atrament/60">Wpłynęło</dt><dd>{formatujWplyw(potwierdzenie.data)}</dd></div>
+                  <div><dt className="text-atrament/60">Cel</dt><dd>{potwierdzenie.cel}</dd></div>
+                </dl>
+              </div>
+            )}
+            {upo && !potwierdzenie && <p className="mt-3 text-sm text-burak">Tego XML-a nie da się przeczytać jako UPO.</p>}
             {!firma?.nip && <p className="mt-2 text-sm text-burak">W danych firmy nie ma NIP. Dopisz go, zanim wyślesz plik.</p>}
             {!firma?.kodUrzedu && <p className="mt-1 text-sm text-burak">W danych firmy nie ma kodu urzędu. Bez niego bramka pliku nie przyjmie.</p>}
             {rozliczenie.importUe.length > 0 && (
