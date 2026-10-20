@@ -18,6 +18,7 @@ function kwota(n: number): string {
 function kodStawkiFa(stawka: StawkaVat): string {
   if (stawka === "zw") return "zw";
   if (stawka === "ue") return "np II";
+  if (stawka === "poza") return "np I";
   if (stawka === 0) return "0 KR";
   return String(stawka);
 }
@@ -38,8 +39,9 @@ export function fakturaFa3(faktura: Faktura, firma: Firma, nipSprzedawcy: string
   const aktywny = faktura.platnikVat;
   const wiersze = faktura.pozycje
     .map((p, i) => {
-      const stawka = stawkaPozycji(p, aktywny || p.stawka === "ue");
-      const netto = kwotyPozycji(p, aktywny || p.stawka === "ue").netto;
+      const zagraniczna = p.stawka === "ue" || p.stawka === "poza";
+      const stawka = stawkaPozycji(p, aktywny || zagraniczna);
+      const netto = kwotyPozycji(p, aktywny || zagraniczna).netto;
       return `<FaWiersz><NrWierszaFa>${i + 1}</NrWierszaFa><P_7>${x(p.nazwa)}</P_7><P_8A>szt.</P_8A><P_8B>${kwota(Math.abs(p.ilosc) || 1)}</P_8B><P_9A>${kwota(p.cenaNetto)}</P_9A><P_11>${kwota(netto)}</P_11><P_12>${kodStawkiFa(stawka)}</P_12></FaWiersz>`;
     })
     .join("");
@@ -50,6 +52,7 @@ export function fakturaFa3(faktura: Faktura, firma: Firma, nipSprzedawcy: string
     koszyk.n5 ? `<P_13_3>${kwota(koszyk.n5)}</P_13_3><P_14_3>${kwota(koszyk.v5)}</P_14_3>` : "",
     koszyk.n0 ? `<P_13_6_1>${kwota(koszyk.n0)}</P_13_6_1>` : "",
     koszyk.nzw ? `<P_13_7>${kwota(koszyk.nzw)}</P_13_7>` : "",
+    koszyk.npoza ? `<P_13_8>${kwota(koszyk.npoza)}</P_13_8>` : "",
     koszyk.nue ? `<P_13_9>${kwota(koszyk.nue)}</P_13_9>` : "",
   ].join("");
 

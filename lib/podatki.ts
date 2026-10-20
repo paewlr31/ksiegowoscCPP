@@ -24,7 +24,7 @@ export function vatOdNettoGr(nettoGr: number, platnikVat: boolean): number {
 }
 
 export function stawkaPozycji(pozycja: Pick<Pozycja, "stawka">, platnikVat: boolean): StawkaVat {
-  if (pozycja.stawka === "ue") return "ue";
+  if (pozycja.stawka === "ue" || pozycja.stawka === "poza") return pozycja.stawka;
   if (!platnikVat) return "zw";
   if (pozycja.stawka === 23 || pozycja.stawka === 8 || pozycja.stawka === 5 || pozycja.stawka === 0 || pozycja.stawka === "zw") {
     return pozycja.stawka;
@@ -33,7 +33,7 @@ export function stawkaPozycji(pozycja: Pick<Pozycja, "stawka">, platnikVat: bool
 }
 
 export function procentStawki(stawka: StawkaVat): number {
-  return stawka === "zw" || stawka === "ue" ? 0 : stawka;
+  return stawka === "zw" || stawka === "ue" || stawka === "poza" ? 0 : stawka;
 }
 
 export function procentCit(firma: Pick<Firma, "rodzaj" | "cit">): number {
@@ -71,18 +71,20 @@ export function sumaPozycji(pozycje: Pozycja[], platnikVat: boolean) {
 }
 
 export function koszykiFaktury(faktura: Faktura) {
-  const koszyk = { n23: 0, v23: 0, n8: 0, v8: 0, n5: 0, v5: 0, n0: 0, nzw: 0, nue: 0 };
+  const koszyk = { n23: 0, v23: 0, n8: 0, v8: 0, n5: 0, v5: 0, n0: 0, nzw: 0, nue: 0, npoza: 0 };
   const pozycje = faktura.pozycje?.length
     ? faktura.pozycje
     : [{ nazwa: "", ilosc: 1, cenaNetto: faktura.netto, stawka: faktura.platnikVat && faktura.vat !== 0 ? 23 : "zw" } as Pozycja];
   for (const pozycja of pozycje) {
-    const stawka = stawkaPozycji(pozycja, faktura.platnikVat || pozycja.stawka === "ue");
-    const kwoty = kwotyPozycji(pozycja, faktura.platnikVat || pozycja.stawka === "ue");
+    const zagraniczna = pozycja.stawka === "ue" || pozycja.stawka === "poza";
+    const stawka = stawkaPozycji(pozycja, faktura.platnikVat || zagraniczna);
+    const kwoty = kwotyPozycji(pozycja, faktura.platnikVat || zagraniczna);
     if (stawka === 23) { koszyk.n23 += kwoty.netto; koszyk.v23 += kwoty.vat; }
     else if (stawka === 8) { koszyk.n8 += kwoty.netto; koszyk.v8 += kwoty.vat; }
     else if (stawka === 5) { koszyk.n5 += kwoty.netto; koszyk.v5 += kwoty.vat; }
     else if (stawka === 0) koszyk.n0 += kwoty.netto;
     else if (stawka === "ue") koszyk.nue += kwoty.netto;
+    else if (stawka === "poza") koszyk.npoza += kwoty.netto;
     else koszyk.nzw += kwoty.netto;
   }
   return koszyk;

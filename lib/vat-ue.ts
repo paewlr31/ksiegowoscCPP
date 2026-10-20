@@ -12,7 +12,9 @@ function zlote(n: number): number {
   return znak * Math.round(Math.abs(n));
 }
 
-export function pozycjeVatUe(faktury: Faktura[], rok: number, miesiac: number) {
+export type PozycjaVatUe = { kraj: string; numer: string; kwota: number };
+
+export function pozycjeVatUe(faktury: Faktura[], rok: number, miesiac: number): PozycjaVatUe[] {
   const grupy = new Map<string, number>();
   for (const faktura of fakturyOkresu(faktury, rok, miesiac)) {
     const kwota = koszykiFaktury(faktura).nue;
@@ -52,6 +54,39 @@ export function vatUeXml(firma: Firma, faktury: Faktura[], rok: number, miesiac:
     </OsobaNiefizyczna>
   </Podmiot1>
   <PozycjeSzczegolowe>${grupy}</PozycjeSzczegolowe>
+  <Pouczenie>1</Pouczenie>
+</Deklaracja>`;
+}
+
+export function vatUekXml(firma: Firma, rok: number, miesiac: number, bylo: PozycjaVatUe[], jest: PozycjaVatUe[]): string | null {
+  const klucze = new Set([...bylo, ...jest].map((p) => `${p.kraj}${p.numer}`));
+  const grupy = [...klucze].flatMap((klucz) => {
+    const stary = bylo.find((p) => `${p.kraj}${p.numer}` === klucz);
+    const nowy = jest.find((p) => `${p.kraj}${p.numer}` === klucz);
+    if (stary && nowy && stary.kwota === nowy.kwota) return [];
+    const byloXml = stary ? `<P_UBa>${stary.kraj}</P_UBa><P_UBb>${x(stary.numer)}</P_UBb><P_UBc>${stary.kwota}</P_UBc>` : "";
+    const jestXml = nowy ? `<P_UJa>${nowy.kraj}</P_UJa><P_UJb>${x(nowy.numer)}</P_UJb><P_UJc>${nowy.kwota}</P_UJc>` : "";
+    return [`<Grupa3>${byloXml}${jestXml}</Grupa3>`];
+  });
+  if (!grupy.length) return null;
+  const nip = firma.nip.replace(/\D/g, "");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Deklaracja xmlns="http://crd.gov.pl/wzor/2021/01/12/10294/">
+  <Naglowek>
+    <KodFormularza kodSystemowy="VATUEK (5)" wersjaSchemy="2-0E">VAT-UEK</KodFormularza>
+    <WariantFormularza>5</WariantFormularza>
+    <Rok>${rok}</Rok>
+    <Miesiac>${miesiac}</Miesiac>
+    <CelZlozenia>1</CelZlozenia>
+    <KodUrzedu>${x(firma.kodUrzedu.trim() || "0000")}</KodUrzedu>
+  </Naglowek>
+  <Podmiot1 rola="Podatnik">
+    <OsobaNiefizyczna>
+      <NIP>${x(nip)}</NIP>
+      <PelnaNazwa>${x(firma.nazwa.trim())}</PelnaNazwa>
+    </OsobaNiefizyczna>
+  </Podmiot1>
+  <PozycjeSzczegolowe>${grupy.join("")}</PozycjeSzczegolowe>
   <Pouczenie>1</Pouczenie>
 </Deklaracja>`;
 }

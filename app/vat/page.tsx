@@ -60,6 +60,7 @@ export default function VatStrona() {
   const nazwaOkresu = `${String(miesiac).padStart(2, "0")}.${rok}`;
   const jestImport = rozliczenie.importUe.length > 0 || rozliczenie.importPozaUe.length > 0;
   const sprzedazUe = pozycjeVatUe(faktury, rok, miesiac);
+  const vatUeZlozone = wysylki.some((w) => w.opis === "VAT-UE" && w.rok === rok && w.miesiac === miesiac);
   const trzebaJpk = Boolean(firma?.platnikVat) || jestImport;
   const potwierdzenie = upo ? czytajUpo(upo) : null;
   const historiaMiesiaca = wysylki.filter((w) => w.rok === rok && w.miesiac === miesiac && w.kod === 200);
@@ -264,10 +265,38 @@ export default function VatStrona() {
               </p>
             )}
             {sprzedazUe.length > 0 && (
-              <p className="mt-3 text-sm">
-                Są usługi sprzedane firmom z Unii. Dla nich jest informacja VAT-UE.{" "}
-                <a className="text-las underline" href={`/api/vat-ue?rok=${rok}&miesiac=${miesiac}`}>Pobierz XML VAT-UE</a>
-              </p>
+              <div className="mt-4 rounded-xl border border-linia bg-papier p-4 text-sm leading-relaxed">
+                <p className="font-medium">VAT-UE za {nazwaOkresu}</p>
+                <p className="mt-2">To nie jest osobny podatek. Papierowego druku nie ma. Formularz nazywa się VAT-UE (5). Składasz go elektronicznie do {formatDaty(termin)}, razem z JPK. {poTerminie ? "Ten termin już minął." : zostalo === 0 ? "Termin jest dzisiaj." : `Zostało ${zostalo} dni.`}</p>
+                <p className="mt-2">Na teście wgrywasz pobrany XML w aplikacji e-Deklaracje wskazanej na bramkę https://test-bramka.edeklaracje.gov.pl. Podpisujesz Profilem Zaufanym albo podpisem kwalifikowanym. Program sam tej bramki nie klika, bo bez podpisu pliku nie przyjmie. Prawdziwej bramki nie używamy.</p>
+                <p className="mt-2">Pozycje: {sprzedazUe.map((p) => `${p.kraj}${p.numer} ${p.kwota} zł`).join(", ")}.</p>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <a className="rounded-lg bg-las px-4 py-2 text-white" href={`/api/vat-ue?rok=${rok}&miesiac=${miesiac}`}>Pobierz VAT-UE (5)</a>
+                  {!vatUeZlozone && (
+                    <button
+                      type="button"
+                      className="rounded-lg border border-linia px-4 py-2"
+                      onClick={async () => {
+                        const odpowiedz = await fetch("/api/vat-ue", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ rok, miesiac }),
+                        });
+                        const dane = await odpowiedz.json();
+                        setWysylka(dane.opis || dane.blad || "");
+                        const historia = await fetch("/api/jpk/wysylki").then((r) => r.json());
+                        setWysylki(Array.isArray(historia) ? historia : []);
+                      }}
+                    >
+                      Zapamiętaj, że złożyłem
+                    </button>
+                  )}
+                  {vatUeZlozone && (
+                    <a className="rounded-lg border border-linia px-4 py-2" href={`/api/vat-ue?rok=${rok}&miesiac=${miesiac}&korekta=1`}>Pobierz korektę VAT-UEK (5)</a>
+                  )}
+                </div>
+                {vatUeZlozone && <p className="mt-2">Jak poprawisz fakturę po złożeniu, nie wysyłasz drugi raz VAT-UE. Pobierasz VAT-UEK (5): tam jest „było” i „jest”.</p>}
+              </div>
             )}
           </section>
 

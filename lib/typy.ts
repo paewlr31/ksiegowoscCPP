@@ -3,7 +3,7 @@ export const PODSTAWA_ZWOLNIENIA =
 
 export type TypFaktury = "proforma" | "zaliczkowa" | "koncowa" | "korekta";
 
-export type StawkaVat = 23 | 8 | 5 | 0 | "zw" | "ue";
+export type StawkaVat = 23 | 8 | 5 | 0 | "zw" | "ue" | "poza";
 
 export type Pozycja = {
   nazwa: string;

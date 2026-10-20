@@ -95,6 +95,7 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
     if (pozycje.some((p) => p.stawka === "ue") && !/^[A-Za-z]{2}[A-Za-z0-9]{2,12}$/.test(nabywca.nip.replace(/\s/g, ""))) {
       znalezione.nip = "Przy usłudze dla firmy z Unii wpisz jej numer VAT, na przykład IE6388047V.";
     }
+    if (pozycje.some((p) => p.stawka === "poza") && !pozycje.some((p) => p.stawka === "ue")) delete znalezione.nip;
     setBledy(znalezione);
     if (pierwszyBlad(znalezione)) {
       setZapis(false);
@@ -252,6 +253,7 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
                   <option value="0">0%</option>
                   <option value="zw">zwolniony</option>
                   <option value="ue">usługa dla firmy z Unii</option>
+                  <option value="poza">usługa dla firmy spoza Unii</option>
                 </select>
               </label>
               <label className="pole">Ilość
@@ -289,7 +291,8 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
         <p className="text-xs uppercase tracking-wide text-mosiadz">Razem</p>
         <p className="mt-2">Netto {pieniadze(kwoty.netto)} zł</p>
         <p>VAT {pieniadze(kwoty.vat)} zł</p>
-        {pozycje.some((p) => p.stawka === "ue") && <p className="mt-3 text-xs leading-relaxed text-atrament/70">Usługa dla firmy z Unii nie ma polskiego VAT. Wchodzi do informacji VAT-UE, nie do podatku 23%.</p>}
+        {pozycje.some((p) => p.stawka === "ue") && <p className="mt-3 text-xs leading-relaxed text-atrament/70">Usługa dla firmy z Unii nie ma polskiego VAT. Wchodzi do informacji VAT-UE (5), termin do 25. następnego miesiąca.</p>}
+        {pozycje.some((p) => p.stawka === "poza") && <p className="mt-3 text-xs leading-relaxed text-atrament/70">Usługa dla firmy spoza Unii nie ma polskiego VAT i nie wchodzi do VAT-UE. Zostaje tylko w JPK.</p>}
         <p className="font-serif text-3xl">{pieniadze(kwoty.brutto)} zł</p>
         {!kwoty.zVat && <p className="mt-3 text-xs leading-relaxed text-atrament/70">{firma?.podstawaZwolnienia}</p>}
         {typ === "korekta" && <p className="mt-3 text-sm">Przy korekcie wpisz różnicę. Kwota ujemna zmniejsza podatek.</p>}

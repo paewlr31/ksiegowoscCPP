@@ -58,7 +58,10 @@ function znacznikSprzedazy(faktura: Faktura): string {
 }
 
 export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: number, miesiac: number, cel: 1 | 2 = 1, powod = ""): string {
-  const sprzedaż = fakturyOkresu(faktury, rok, miesiac).filter((f) => f.vat !== 0 || f.platnikVat);
+  const sprzedaż = fakturyOkresu(faktury, rok, miesiac).filter((f) => {
+    const koszyk = koszykiFaktury(f);
+    return f.vat !== 0 || f.platnikVat || koszyk.nue !== 0 || koszyk.npoza !== 0;
+  });
   const kosztyMiesiaca = kosztyOkresu(koszty, rok, miesiac);
   const importy = kosztyMiesiaca.filter((k) => k.rodzaj !== "kraj" && k.vatNalezny !== 0);
   const zakupy = kosztyMiesiaca.filter((k) => k.rodzaj === "kraj" || k.vatNaliczony !== 0);
@@ -67,12 +70,13 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
     ...sprzedaż.map((f) => {
       const koszyk = koszykiFaktury(f);
       const surowy = f.nabywca.nip.replace(/\s/g, "").toUpperCase();
-      const unijny = koszyk.nue !== 0 && /^[A-Z]{2}/.test(surowy);
+      const unijny = (koszyk.nue !== 0 || koszyk.npoza !== 0) && /^[A-Z]{2}/.test(surowy);
       const kod = unijny ? kodKraju(surowy.slice(0, 2)) : "";
       const nip = unijny ? surowy.slice(2) || "BRAK" : f.nabywca.nip.replace(/\D/g, "") || "BRAK";
       const dataSprzedazy = f.dataSprzedazy && f.dataSprzedazy !== f.dataWystawienia ? `<DataSprzedazy>${f.dataSprzedazy}</DataSprzedazy>` : "";
       const pola = [
         koszyk.nzw ? `<K_10>${kwota(koszyk.nzw)}</K_10>` : "",
+        koszyk.npoza ? `<K_11>${kwota(koszyk.npoza)}</K_11>` : "",
         koszyk.nue ? `<K_12>${kwota(koszyk.nue)}</K_12>` : "",
         koszyk.n0 ? `<K_13>${kwota(koszyk.n0)}</K_13>` : "",
         koszyk.n5 ? `<K_15>${kwota(koszyk.n5)}</K_15><K_16>${kwota(koszyk.v5)}</K_16>` : "",
@@ -101,6 +105,7 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
 
   const koszyki = sprzedaż.map(koszykiFaktury);
   const p10 = koszyki.reduce((s, k) => s + k.nzw, 0);
+  const p11 = koszyki.reduce((s, k) => s + k.npoza, 0);
   const p12 = koszyki.reduce((s, k) => s + k.nue, 0);
   const p13 = koszyki.reduce((s, k) => s + k.n0, 0);
   const p15 = koszyki.reduce((s, k) => s + k.n5, 0);
@@ -118,6 +123,7 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
   const p42 = zakupy.reduce((s, k) => s + (k.vatNaliczony !== 0 ? k.netto : 0), 0);
   const p43 = zakupy.reduce((s, k) => s + k.vatNaliczony, 0);
   const z10 = doZlotych(p10);
+  const z11 = doZlotych(p11);
   const z12 = doZlotych(p12);
   const z13 = doZlotych(p13);
   const z15 = doZlotych(p15);
@@ -132,7 +138,7 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
   const z30 = doZlotych(p30);
   const z42 = doZlotych(p42);
   const z43 = doZlotych(p43);
-  const z37 = z10 + z13 + z15 + z17 + z19 + z27 + z29;
+  const z37 = z10 + z11 + z13 + z15 + z17 + z19 + z27 + z29;
   const z38 = z16 + z18 + z20 + z28 + z30;
   const z48 = z43;
   const z51 = Math.max(0, z38 - z48);
@@ -165,7 +171,7 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
     </Naglowek>
     <PozycjeSzczegolowe>
       ${z10 ? `<P_10>${z10}</P_10>` : ""}
-      ${z12 ? `<P_11>0</P_11><P_12>${z12}</P_12>` : ""}
+      ${z11 || z12 ? `<P_11>${z11}</P_11>${z12 ? `<P_12>${z12}</P_12>` : ""}` : ""}
       ${z13 ? `<P_13>${z13}</P_13>` : ""}
       ${para(z15, z16, "P_15", "P_16")}
       ${para(z17, z18, "P_17", "P_18")}
