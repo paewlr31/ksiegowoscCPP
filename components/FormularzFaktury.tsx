@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ETYKIETA, pustyNabywca, type Faktura, type Firma, type Pozycja, type StawkaVat, type TypFaktury } from "@/lib/typy";
 import { fakturaZVat, pieniadze, sumaPozycji } from "@/lib/podatki";
@@ -20,6 +20,7 @@ const NABYWCA_TEST = {
 
 export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
   const router = useRouter();
+  const szukane = useSearchParams();
   const [firma, setFirma] = useState<Firma | null>(null);
   const [faktury, setFaktury] = useState<Faktura[]>([]);
   const [typ, setTyp] = useState<TypFaktury>("koncowa");
@@ -57,6 +58,21 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
     setKoryguje(edytowana.koryguje ?? "");
     setPrzyczyna(edytowana.przyczynaKorekty);
   }, [edytowana]);
+
+  useEffect(() => {
+    if (edytowana) return;
+    const id = szukane.get("korekta");
+    if (!id) return;
+    const pierwotna = faktury.find((f) => f.id === id);
+    if (!pierwotna) return;
+    setTyp("korekta");
+    setKoryguje(id);
+    setNabywca({ ...pustyNabywca(), ...pierwotna.nabywca });
+    setPozycje(pierwotna.pozycje.map((p) => ({ ...p, cenaNetto: p.cenaNetto > 0 ? -p.cenaNetto : p.cenaNetto })));
+    setPrzyczyna("Korekta całej faktury");
+    setDataWystawienia(DZIS);
+    setDataSprzedazy(pierwotna.dataSprzedazy);
+  }, [edytowana, faktury, szukane]);
 
   const kwoty = useMemo(() => {
     const netto = sumaPozycji(pozycje, false).netto;
@@ -132,6 +148,17 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
           <p className="font-serif text-3xl">{edytowana ? `Edycja ${edytowana.numer}` : "Nowa faktura"}</p>
           <p className="text-sm text-atrament/70">Sprzedawcą jest firma z danych ogólnych. Tu zmieniasz tylko nabywcę i pozycje.</p>
         </div>
+        <details className="rounded-xl border border-linia bg-papier p-4 text-sm leading-relaxed" open>
+          <summary className="cursor-pointer font-medium">Jak wystawić, poprawić i usunąć</summary>
+          <ol className="mt-3 list-decimal space-y-2 pl-5">
+            <li>Nowa faktura to dodanie. Proforma nie wchodzi do VAT ani CIT. Końcowa wchodzi.</li>
+            <li>Polska firma albo osoba: stawka 23, 8, 5, 0 albo zwolnienie.</li>
+            <li>Firma z Unii, na przykład Niemcy: stawka „usługa dla firmy z Unii” i jej numer VAT. Polskiego VAT nie ma. Powstaje plik VAT-UE.</li>
+            <li>Kraj spoza Unii, na przykład Senegal: stawka „eksport usługi poza Unię”. Polskiego VAT nie ma i VAT-UE nie ma. Netto i tak wchodzi do CIT, a JPK pokazuje usługę poza Polską.</li>
+            <li>Zanim faktura wejdzie do KSeF, na jej stronie jest Edytuj i Anuluj. Anuluj kasuje ją z ksiąg.</li>
+            <li>Jak numer KSeF już jest, edycji i kasowania nie ma. Klikasz „Wystaw korektę”. Program podstawia minus. Minus zmniejsza CIT i VAT. Korektę korygujesz kolejną korektą.</li>
+          </ol>
+        </details>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="pole">Typ
@@ -253,7 +280,7 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
                   <option value="0">0%</option>
                   <option value="zw">zwolniony</option>
                   <option value="ue">usługa dla firmy z Unii</option>
-                  <option value="poza">usługa dla firmy spoza Unii</option>
+                  <option value="poza">eksport usługi poza Unię, na przykład Senegal</option>
                 </select>
               </label>
               <label className="pole">Ilość
@@ -292,7 +319,7 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
         <p className="mt-2">Netto {pieniadze(kwoty.netto)} zł</p>
         <p>VAT {pieniadze(kwoty.vat)} zł</p>
         {pozycje.some((p) => p.stawka === "ue") && <p className="mt-3 text-xs leading-relaxed text-atrament/70">Usługa dla firmy z Unii nie ma polskiego VAT. Wchodzi do informacji VAT-UE (5), termin do 25. następnego miesiąca.</p>}
-        {pozycje.some((p) => p.stawka === "poza") && <p className="mt-3 text-xs leading-relaxed text-atrament/70">Usługa dla firmy spoza Unii nie ma polskiego VAT i nie wchodzi do VAT-UE. Zostaje tylko w JPK.</p>}
+        {pozycje.some((p) => p.stawka === "poza") && <p className="mt-3 text-xs leading-relaxed text-atrament/70">Eksport usługi do Senegalu i każdego kraju spoza Unii: polskiego VAT nie ma, VAT-UE nie ma. Netto wchodzi do CIT. W JPK jest to świadczenie poza Polską.</p>}
         <p className="font-serif text-3xl">{pieniadze(kwoty.brutto)} zł</p>
         {!kwoty.zVat && <p className="mt-3 text-xs leading-relaxed text-atrament/70">{firma?.podstawaZwolnienia}</p>}
         {typ === "korekta" && <p className="mt-3 text-sm">Przy korekcie wpisz różnicę. Kwota ujemna zmniejsza podatek.</p>}

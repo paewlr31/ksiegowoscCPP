@@ -101,6 +101,10 @@ export default function FakturaStrona() {
           <div className="no-print rounded-2xl border border-las/40 bg-las/5 p-4">
             <p className="font-medium text-las">Tak, ta faktura jest w testowym KSeF.</p>
             <p className="mt-2 break-all text-sm">Numer: {faktura.ksefNumer}</p>
+            <p className="mt-2 text-sm">Tej faktury już nie edytujesz i nie usuwasz. Poprawkę wystawiasz jako korektę.</p>
+            <Link href={`/faktury/nowa?korekta=${faktura.id}`} className="mt-3 inline-block rounded-lg bg-las px-4 py-2 text-sm text-white">
+              Wystaw korektę
+            </Link>
             <p className="mt-2 text-sm">
               Sprawdzenie: wejdź na{" "}
               <a className="underline" href="https://ap-test.ksef.mf.gov.pl" target="_blank" rel="noreferrer">ap-test.ksef.mf.gov.pl</a>

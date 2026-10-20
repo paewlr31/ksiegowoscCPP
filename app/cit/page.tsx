@@ -116,7 +116,7 @@ export default function CitStrona() {
             Symbol: CIT. Okres: {nazwaOkresu}. To ten sam numer co przy VAT. Inny jest tylko symbol.
           </li>
           <li>Raz w roku, do 31 marca, spółka składa zeznanie CIT-8 na bramce e-Deklaracji i dopłaca różnicę symbolem CIT-8. Tego XML-a program złoży później, razem z księgą.</li>
-          <li>Zaliczka jest od dochodu: przychód z faktur minus koszty wpisane w zakładce Koszty. Proform nie ma w przychodzie.</li>
+          <li>Zaliczka jest od dochodu: przychód z faktur minus koszty wpisane w zakładce Koszty. Proform nie ma w przychodzie. Eksport usługi do Senegalu i sprzedaż firmie z Unii też są przychodem, od netto, choć polskiego VAT od nich nie ma.</li>
         </ol>
       </details>
 

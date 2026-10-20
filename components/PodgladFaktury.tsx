@@ -56,7 +56,7 @@ export function PodgladFaktury({ faktura, firma }: { faktura: Faktura; firma: Fi
         <tbody>
           {faktura.pozycje.map((p, i) => (
             <tr key={i} className="border-b border-linia/70">
-              <td className="py-2">{p.nazwa}</td>
+              <td className="py-2">{p.nazwa}{p.stawka === "poza" ? " · poza Unią" : p.stawka === "ue" ? " · Unia" : ""}</td>
               <td>{p.ilosc}</td>
               <td>{pieniadze(p.ilosc * p.cenaNetto)}</td>
             </tr>
@@ -68,7 +68,13 @@ export function PodgladFaktury({ faktura, firma }: { faktura: Faktura; firma: Fi
         <div>VAT: {pieniadze(faktura.vat)} zł</div>
         <div className="font-serif text-2xl">Brutto: {pieniadze(faktura.brutto)} zł</div>
       </dl>
-      {!faktura.platnikVat && (
+      {faktura.pozycje.some((p) => p.stawka === "poza") && (
+        <p className="mt-4 text-xs leading-relaxed text-atrament/70">Świadczenie usług poza terytorium kraju, na przykład do Senegalu. Nie podlega polskiemu VAT. Netto jest przychodem do CIT.</p>
+      )}
+      {faktura.pozycje.some((p) => p.stawka === "ue") && (
+        <p className="mt-4 text-xs leading-relaxed text-atrament/70">Usługa dla podatnika z Unii. Polskiego VAT nie ma. Transakcja wchodzi do informacji VAT-UE.</p>
+      )}
+      {!faktura.platnikVat && !faktura.pozycje.some((p) => p.stawka === "poza" || p.stawka === "ue") && (
         <p className="mt-4 text-xs leading-relaxed text-atrament/70">{sprzedawca.podstawaZwolnienia}</p>
       )}
       {faktura.typ === "proforma" && (

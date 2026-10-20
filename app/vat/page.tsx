@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Faktura, Firma, Koszt, WysylkaJpk } from "@/lib/typy";
-import { dniDo, formatDaty, pieniadze, rozliczenieMiesiaca, terminPoOkresie } from "@/lib/podatki";
+import { dniDo, fakturyOkresu, formatDaty, koszykiFaktury, pieniadze, rozliczenieMiesiaca, terminPoOkresie } from "@/lib/podatki";
 import { czytajUpo, formatujWplyw } from "@/lib/upo";
 import { pozycjeVatUe } from "@/lib/vat-ue";
 
@@ -60,6 +60,7 @@ export default function VatStrona() {
   const nazwaOkresu = `${String(miesiac).padStart(2, "0")}.${rok}`;
   const jestImport = rozliczenie.importUe.length > 0 || rozliczenie.importPozaUe.length > 0;
   const sprzedazUe = pozycjeVatUe(faktury, rok, miesiac);
+  const eksportPozaUnie = fakturyOkresu(faktury, rok, miesiac).some((f) => koszykiFaktury(f).npoza !== 0);
   const vatUeZlozone = wysylki.some((w) => w.opis === "VAT-UE" && w.rok === rok && w.miesiac === miesiac);
   const trzebaJpk = Boolean(firma?.platnikVat) || jestImport;
   const potwierdzenie = upo ? czytajUpo(upo) : null;
@@ -262,6 +263,11 @@ export default function VatStrona() {
             {rozliczenie.importUe.length > 0 && (
               <p className="mt-3 text-sm">
                 Import usług z Unii ({rozliczenie.importUe.map((k) => `${k.dostawca} ${pieniadze(k.netto)} zł`).join(", ")}) jest już w JPK jako należne 23%. VAT-UE z zakupu Google się nie składa. Tę informację składa Google w Irlandii. Cursor jest spoza Unii i też nie wchodzi do VAT-UE.
+              </p>
+            )}
+            {eksportPozaUnie && (
+              <p className="mt-3 text-sm">
+                Jest eksport usługi poza Unię, na przykład do Senegalu. Polskiego VAT od tego nie płacisz i VAT-UE nie składasz. Netto wchodzi do CIT. W JPK jest to usługa poza Polską.
               </p>
             )}
             {sprzedazUe.length > 0 && (
