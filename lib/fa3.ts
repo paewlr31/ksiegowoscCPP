@@ -1,4 +1,5 @@
-import type { Faktura, Firma } from "./typy";
+import type { Faktura, Firma, StawkaVat } from "./typy";
+import { koszykiFaktury, kwotyPozycji, stawkaPozycji } from "./podatki";
 
 const NS = "http://crd.gov.pl/wzor/2025/06/25/13775/";
 
@@ -14,6 +15,13 @@ function kwota(n: number): string {
   return n.toFixed(2);
 }
 
+function kodStawkiFa(stawka: StawkaVat): string {
+  if (stawka === "zw") return "zw";
+  if (stawka === "ue") return "np II";
+  if (stawka === 0) return "0 KR";
+  return String(stawka);
+}
+
 export function rodzajKsef(faktura: Faktura, wszystkie: Faktura[]): string {
   if (faktura.typ === "zaliczkowa") return "ZAL";
   if (faktura.typ === "koncowa") return faktura.podstawy.length ? "ROZ" : "VAT";
@@ -27,21 +35,27 @@ export function rodzajKsef(faktura: Faktura, wszystkie: Faktura[]): string {
 }
 
 export function fakturaFa3(faktura: Faktura, firma: Firma, nipSprzedawcy: string, wszystkie: Faktura[]): string {
-  const platnik = faktura.platnikVat;
+  const aktywny = faktura.platnikVat;
   const wiersze = faktura.pozycje
     .map((p, i) => {
-      const netto = p.ilosc * p.cenaNetto;
-      return `<FaWiersz><NrWierszaFa>${i + 1}</NrWierszaFa><P_7>${x(p.nazwa)}</P_7><P_8A>szt.</P_8A><P_8B>${kwota(Math.abs(p.ilosc) || 1)}</P_8B><P_9A>${kwota(p.cenaNetto)}</P_9A><P_11>${kwota(netto)}</P_11><P_12>${platnik ? "23" : "zw"}</P_12></FaWiersz>`;
+      const stawka = stawkaPozycji(p, aktywny || p.stawka === "ue");
+      const netto = kwotyPozycji(p, aktywny || p.stawka === "ue").netto;
+      return `<FaWiersz><NrWierszaFa>${i + 1}</NrWierszaFa><P_7>${x(p.nazwa)}</P_7><P_8A>szt.</P_8A><P_8B>${kwota(Math.abs(p.ilosc) || 1)}</P_8B><P_9A>${kwota(p.cenaNetto)}</P_9A><P_11>${kwota(netto)}</P_11><P_12>${kodStawkiFa(stawka)}</P_12></FaWiersz>`;
     })
     .join("");
+  const koszyk = koszykiFaktury(faktura);
+  const stawka = [
+    koszyk.n23 ? `<P_13_1>${kwota(koszyk.n23)}</P_13_1><P_14_1>${kwota(koszyk.v23)}</P_14_1>` : "",
+    koszyk.n8 ? `<P_13_2>${kwota(koszyk.n8)}</P_13_2><P_14_2>${kwota(koszyk.v8)}</P_14_2>` : "",
+    koszyk.n5 ? `<P_13_3>${kwota(koszyk.n5)}</P_13_3><P_14_3>${kwota(koszyk.v5)}</P_14_3>` : "",
+    koszyk.n0 ? `<P_13_6_1>${kwota(koszyk.n0)}</P_13_6_1>` : "",
+    koszyk.nzw ? `<P_13_7>${kwota(koszyk.nzw)}</P_13_7>` : "",
+    koszyk.nue ? `<P_13_9>${kwota(koszyk.nue)}</P_13_9>` : "",
+  ].join("");
 
-  const stawka = platnik
-    ? `<P_13_1>${kwota(faktura.netto)}</P_13_1><P_14_1>${kwota(faktura.vat)}</P_14_1>`
-    : `<P_13_7>${kwota(faktura.netto)}</P_13_7>`;
-
-  const zwolnienie = platnik
-    ? "<P_19N>1</P_19N>"
-    : `<P_19>1</P_19><P_19A>${x(firma.podstawaZwolnienia)}</P_19A>`;
+  const zwolnienie = koszyk.nzw
+    ? `<P_19>1</P_19><P_19A>${x(firma.podstawaZwolnienia)}</P_19A>`
+    : "<P_19N>1</P_19N>";
 
   const korekta = faktura.typ === "korekta"
     ? blokKorekty(faktura, wszystkie)

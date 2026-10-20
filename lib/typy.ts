@@ -3,10 +3,13 @@ export const PODSTAWA_ZWOLNIENIA =
 
 export type TypFaktury = "proforma" | "zaliczkowa" | "koncowa" | "korekta";
 
+export type StawkaVat = 23 | 8 | 5 | 0 | "zw" | "ue";
+
 export type Pozycja = {
   nazwa: string;
   ilosc: number;
   cenaNetto: number;
+  stawka?: StawkaVat;
 };
 
 export type RodzajDzialalnosci = "nierejestrowana" | "spolka";
@@ -75,6 +78,9 @@ export type Koszt = {
   kraj: string;
   rodzaj: RodzajKosztu;
   opis: string;
+  rachunek: string;
+  bialaLista: string;
+  ksefZakupu: string;
   netto: number;
   vatNaFakturze: number;
   vatNalezny: number;

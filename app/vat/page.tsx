@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Faktura, Firma, Koszt, WysylkaJpk } from "@/lib/typy";
 import { dniDo, formatDaty, pieniadze, rozliczenieMiesiaca, terminPoOkresie } from "@/lib/podatki";
 import { czytajUpo, formatujWplyw } from "@/lib/upo";
+import { pozycjeVatUe } from "@/lib/vat-ue";
 
 function cyfry(wartosc: string, limit: number) {
   return wartosc.replace(/\D/g, "").replace(/^0+/, "").slice(0, limit);
@@ -58,6 +59,7 @@ export default function VatStrona() {
   const poTerminie = zostalo < 0;
   const nazwaOkresu = `${String(miesiac).padStart(2, "0")}.${rok}`;
   const jestImport = rozliczenie.importUe.length > 0 || rozliczenie.importPozaUe.length > 0;
+  const sprzedazUe = pozycjeVatUe(faktury, rok, miesiac);
   const trzebaJpk = Boolean(firma?.platnikVat) || jestImport;
   const potwierdzenie = upo ? czytajUpo(upo) : null;
   const historiaMiesiaca = wysylki.filter((w) => w.rok === rok && w.miesiac === miesiac && w.kod === 200);
@@ -258,8 +260,13 @@ export default function VatStrona() {
             {!firma?.kodUrzedu && <p className="mt-1 text-sm text-burak">W danych firmy nie ma kodu urzędu. Bez niego bramka pliku nie przyjmie.</p>}
             {rozliczenie.importUe.length > 0 && (
               <p className="mt-3 text-sm">
-                W tym miesiącu jest import usług z Unii ({rozliczenie.importUe.map((k) => `${k.dostawca} ${pieniadze(k.netto)} zł`).join(", ")}).
-                Oprócz JPK złóż informację VAT-UE do 25. na bramce e-Deklaracji. Cursora i innych spoza Unii w VAT-UE nie ma.
+                Import usług z Unii ({rozliczenie.importUe.map((k) => `${k.dostawca} ${pieniadze(k.netto)} zł`).join(", ")}) jest już w JPK jako należne 23%. VAT-UE z zakupu Google się nie składa. Tę informację składa Google w Irlandii. Cursor jest spoza Unii i też nie wchodzi do VAT-UE.
+              </p>
+            )}
+            {sprzedazUe.length > 0 && (
+              <p className="mt-3 text-sm">
+                Są usługi sprzedane firmom z Unii. Dla nich jest informacja VAT-UE.{" "}
+                <a className="text-las underline" href={`/api/vat-ue?rok=${rok}&miesiac=${miesiac}`}>Pobierz XML VAT-UE</a>
               </p>
             )}
           </section>
@@ -275,8 +282,8 @@ export default function VatStrona() {
                   ? `Przelej ${pieniadze(rozliczenie.vat)} zł na mikrorachunek ${mikrorachunek || "(uzupełnij go w danych firmy)"}. Symbol: VAT-7. Okres: ${nazwaOkresu}.`
                   : "Przelewu nie rób. Podatek należny został odliczony."}
               </li>
-              {rozliczenie.importUe.length > 0 && (
-                <li>Dodatkowo złóż informację VAT-UE do tego samego dnia, 25., na bramce e-Deklaracji. Dotyczy tylko kosztów z Unii.</li>
+              {sprzedazUe.length > 0 && (
+                <li>Pobierz XML VAT-UE i wyślij go na testową bramkę e-Deklaracji do 25. Dotyczy tylko usług, które sam sprzedałeś firmie z Unii.</li>
               )}
             </ol>
           </details>

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ETYKIETA, pustyNabywca, type Faktura, type Firma, type Pozycja, type TypFaktury } from "@/lib/typy";
+import { ETYKIETA, pustyNabywca, type Faktura, type Firma, type Pozycja, type StawkaVat, type TypFaktury } from "@/lib/typy";
 import { fakturaZVat, pieniadze, sumaPozycji } from "@/lib/podatki";
 import { bledyNabywcy, bledyPozycji, pierwszyBlad, type Bledy } from "@/lib/walidacja";
 
@@ -27,7 +27,7 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
   const [dataSprzedazy, setDataSprzedazy] = useState(DZIS);
   const [nabywca, setNabywca] = useState(pustyNabywca());
   const [pozycje, setPozycje] = useState<Pozycja[]>([
-    { nazwa: "Strona internetowa", ilosc: 1, cenaNetto: 1000 },
+    { nazwa: "Strona internetowa", ilosc: 1, cenaNetto: 1000, stawka: 23 },
   ]);
   const [podstawy, setPodstawy] = useState<string[]>([]);
   const [koryguje, setKoryguje] = useState("");
@@ -35,6 +35,7 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
   const [blad, setBlad] = useState("");
   const [bledy, setBledy] = useState<Bledy>({});
   const [zapis, setZapis] = useState(false);
+  const [szukajPodstawy, setSzukajPodstawy] = useState("");
 
   useEffect(() => {
     Promise.all([fetch("/api/firma").then((r) => r.json()), fetch("/api/faktury").then((r) => r.json())]).then(
@@ -65,14 +66,22 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
   }, [pozycje, firma, faktury, dataWystawienia, typ, edytowana?.id]);
 
   const zaliczki = faktury.filter((f) => podstawy.includes(f.id));
+  const fraza = szukajPodstawy.trim().toLowerCase();
+  const podpowiedzi = fraza
+    ? faktury.filter((f) => `${f.numer} ${f.nabywca.nazwa} ${ETYKIETA[f.typ]}`.toLowerCase().includes(fraza) && !podstawy.includes(f.id)).slice(0, 20)
+    : [];
 
   function zmienPozycje(indeks: number, pole: keyof Pozycja, wartosc: string) {
     setPozycje((lista) =>
-      lista.map((p, i) =>
-        i === indeks
-          ? { ...p, [pole]: pole === "nazwa" ? wartosc : Number(wartosc) }
-          : p,
-      ),
+      lista.map((p, i) => {
+        if (i !== indeks) return p;
+        if (pole === "nazwa") return { ...p, nazwa: wartosc };
+        if (pole === "stawka") {
+          const stawka: StawkaVat = wartosc === "zw" || wartosc === "ue" ? wartosc : Number(wartosc) as StawkaVat;
+          return { ...p, stawka };
+        }
+        return { ...p, [pole]: Number(wartosc) };
+      }),
     );
   }
 
@@ -83,6 +92,9 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
     setBlad("");
     const znalezione = { ...bledyNabywcy(nabywca), ...bledyPozycji(pozycje, typ) };
     if (typ === "korekta" && !koryguje) znalezione.koryguje = "Wybierz fakturę, którą korygujesz.";
+    if (pozycje.some((p) => p.stawka === "ue") && !/^[A-Za-z]{2}[A-Za-z0-9]{2,12}$/.test(nabywca.nip.replace(/\s/g, ""))) {
+      znalezione.nip = "Przy usłudze dla firmy z Unii wpisz jej numer VAT, na przykład IE6388047V.";
+    }
     setBledy(znalezione);
     if (pierwszyBlad(znalezione)) {
       setZapis(false);
@@ -155,23 +167,36 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
 
         <fieldset>
           <legend className="pole">Na podstawie</legend>
-          <p className="mb-2 text-xs text-atrament/60">Proforma może być podstawą zaliczki, zaliczka podstawą końcowej, korekta podstawą kolejnej korekty.</p>
-          <div className="max-h-40 space-y-1 overflow-auto rounded-lg border border-linia p-2">
-            {faktury.length === 0 && <p className="text-sm text-atrament/50">Nie ma jeszcze wcześniejszych faktur.</p>}
-            {faktury.map((f) => (
-              <label key={f.id} className="flex items-center gap-2 text-sm normal-case tracking-normal text-atrament">
-                <input
-                  type="checkbox"
-                  className="w-auto"
-                  checked={podstawy.includes(f.id)}
-                  onChange={(e) =>
-                    setPodstawy((lista) => e.target.checked ? [...lista, f.id] : lista.filter((id) => id !== f.id))
-                  }
-                />
-                {ETYKIETA[f.typ]} {f.numer} · {pieniadze(f.brutto)} zł
-              </label>
-            ))}
-          </div>
+          <p className="mb-2 text-xs text-atrament/60">Zostaw puste, jeśli ta faktura nie wynika z wcześniejszej. Jak wynika, wpisz numer. Lista nie pokazuje wszystkich faktur naraz.</p>
+          {zaliczki.length > 0 && (
+            <ul className="mb-2 flex flex-wrap gap-2">
+              {zaliczki.map((f) => (
+                <li key={f.id} className="flex items-center gap-2 rounded-full border border-linia px-3 py-1 text-sm">
+                  {ETYKIETA[f.typ]} {f.numer}
+                  <button type="button" className="text-burak" onClick={() => setPodstawy((lista) => lista.filter((id) => id !== f.id))}>usuń</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <input className="w-full" value={szukajPodstawy} onChange={(e) => setSzukajPodstawy(e.target.value)} placeholder="Szukaj numeru, na przykład FV/1" />
+          {fraza && (
+            <div className="mt-1 max-h-48 overflow-auto rounded-lg border border-linia">
+              {podpowiedzi.length === 0 && <p className="p-3 text-sm text-atrament/60">Nie ma faktury o takim numerze.</p>}
+              {podpowiedzi.map((f) => (
+                <button
+                  type="button"
+                  key={f.id}
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-papier"
+                  onClick={() => {
+                    setPodstawy((lista) => [...lista, f.id]);
+                    setSzukajPodstawy("");
+                  }}
+                >
+                  {ETYKIETA[f.typ]} {f.numer} · {f.nabywca.nazwa || "bez nazwy"} · {pieniadze(f.brutto)} zł
+                </button>
+              ))}
+            </div>
+          )}
           {typ === "koncowa" && zaliczki.length > 0 && (
             <p className="mt-2 text-sm text-mosiadz">
               Zaliczki w tym szlaczku: {pieniadze(zaliczki.reduce((s, f) => s + f.brutto, 0))} zł. Na tej fakturze wpisz tylko kwotę, która została.
@@ -215,9 +240,19 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
 
         <div className="space-y-3">
           {pozycje.map((p, i) => (
-            <div key={i} className="grid gap-2 rounded-lg border border-linia p-3 sm:grid-cols-[1fr_5rem_8rem_auto]">
+            <div key={i} className="grid gap-2 rounded-lg border border-linia p-3 sm:grid-cols-[1fr_8rem_5rem_8rem_auto]">
               <label className="pole">Nazwa
                 <input className={`mt-1 ${bledy[`pozycja-${i}`] ? "border-burak" : ""}`} value={p.nazwa} onChange={(e) => zmienPozycje(i, "nazwa", e.target.value)} />
+              </label>
+              <label className="pole">VAT
+                <select className="mt-1" value={String(p.stawka ?? (kwoty.zVat ? 23 : "zw"))} onChange={(e) => zmienPozycje(i, "stawka", e.target.value)}>
+                  <option value="23">23%</option>
+                  <option value="8">8%</option>
+                  <option value="5">5%</option>
+                  <option value="0">0%</option>
+                  <option value="zw">zwolniony</option>
+                  <option value="ue">usługa dla firmy z Unii</option>
+                </select>
               </label>
               <label className="pole">Ilość
                 <input className={`mt-1 ${bledy[`ilosc-${i}`] ? "border-burak" : ""}`} type="number" step="0.01" value={p.ilosc} onChange={(e) => zmienPozycje(i, "ilosc", e.target.value)} />
@@ -233,7 +268,7 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
           <button
             type="button"
             className="text-sm text-las"
-            onClick={() => setPozycje((lista) => [...lista, { nazwa: "", ilosc: 1, cenaNetto: 0 }])}
+            onClick={() => setPozycje((lista) => [...lista, { nazwa: "", ilosc: 1, cenaNetto: 0, stawka: 23 }])}
           >
             Dodaj pozycję
           </button>
@@ -253,7 +288,8 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
       <aside className="h-fit rounded-2xl border border-linia bg-karta p-5">
         <p className="text-xs uppercase tracking-wide text-mosiadz">Razem</p>
         <p className="mt-2">Netto {pieniadze(kwoty.netto)} zł</p>
-        <p>VAT {kwoty.zVat ? "23%" : "zwolniony"} · {pieniadze(kwoty.vat)} zł</p>
+        <p>VAT {pieniadze(kwoty.vat)} zł</p>
+        {pozycje.some((p) => p.stawka === "ue") && <p className="mt-3 text-xs leading-relaxed text-atrament/70">Usługa dla firmy z Unii nie ma polskiego VAT. Wchodzi do informacji VAT-UE, nie do podatku 23%.</p>}
         <p className="font-serif text-3xl">{pieniadze(kwoty.brutto)} zł</p>
         {!kwoty.zVat && <p className="mt-3 text-xs leading-relaxed text-atrament/70">{firma?.podstawaZwolnienia}</p>}
         {typ === "korekta" && <p className="mt-3 text-sm">Przy korekcie wpisz różnicę. Kwota ujemna zmniejsza podatek.</p>}

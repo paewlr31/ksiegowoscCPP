@@ -77,7 +77,9 @@ export function bledyFirmy(firma: Firma): Bledy {
 export function bledyNabywcy(nabywca: Nabywca): Bledy {
   const bledy: Bledy = {};
   if (!nabywca.nazwa.trim()) bledy.nazwa = "Wpisz nazwę nabywcy.";
-  if (nabywca.nip.trim() && !nipPoprawny(nabywca.nip)) bledy.nip = "NIP nabywcy ma 10 cyfr. Jak go nie ma, zostaw puste.";
+  const nip = nabywca.nip.replace(/\s/g, "");
+  if (nip && /^\d/.test(nip) && !nipPoprawny(nip)) bledy.nip = "NIP nabywcy ma 10 cyfr. Jak go nie ma, zostaw puste.";
+  if (nip && /^[A-Za-z]/.test(nip) && !/^[A-Za-z]{2}[A-Za-z0-9]{2,12}$/.test(nip)) bledy.nip = "Numer VAT z Unii zaczyna się od kodu kraju, na przykład IE6388047V.";
   if (nabywca.email.trim() && !emailPoprawny(nabywca.email)) bledy.email = "E-mail jest niepoprawny. Możesz zostawić puste.";
   if (nabywca.telefon.trim() && !telefonDowolny(nabywca.telefon)) bledy.telefon = "Telefon ma od 8 do 15 cyfr. Możesz zostawić puste.";
   if (nabywca.kod.trim() && !kodPocztowy(nabywca.kod)) bledy.kod = "Kod pocztowy ma format 00-000 albo zostaw puste.";

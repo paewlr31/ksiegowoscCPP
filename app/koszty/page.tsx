@@ -10,7 +10,7 @@ const DZIS = new Date().toISOString().slice(0, 10);
 
 const OPIS_RODZAJU: Record<RodzajKosztu, string> = {
   kraj: "Polska faktura. Do KSeF jej nie wysyłasz: polski sprzedawca sam ją tam wystawia, a ty ją odbierasz. Tu wpisujesz ją, żeby weszła w VAT i CIT.",
-  ue: "Usługa z Unii, na przykład Google Ads z Irlandii. Na fakturze zwykle nie ma polskiego VAT. Spółka sama nalicza 23% i, jeśli jest płatnikiem VAT, odlicza tę samą kwotę. Dodatkowo składujesz informację VAT-UE.",
+  ue: "Usługa z Unii, na przykład Google Ads z Irlandii. Na fakturze zwykle nie ma polskiego VAT. Spółka sama nalicza 23% w JPK. VAT-UE z tego zakupu się nie składa: tę informację składa Google w Irlandii.",
   poza_ue: "Usługa spoza Unii, na przykład Cursor ze Stanów. Też sam naliczasz polskie 23%. Do VAT-UE tego nie wpisujesz. Do KSeF ta faktura nie trafia.",
 };
 
@@ -24,6 +24,10 @@ export default function KosztyStrona() {
   const [numer, setNumer] = useState("");
   const [data, setData] = useState(DZIS);
   const [opis, setOpis] = useState("");
+  const [rachunek, setRachunek] = useState("");
+  const [bialaLista, setBialaLista] = useState("");
+  const [pobieranie, setPobieranie] = useState(false);
+  const [zakupyKsef, setZakupyKsef] = useState<Array<{ ksefNumber: string; invoiceNumber?: string; issueDate?: string; seller?: { name?: string; nip?: string }; netAmount?: number; vatAmount?: number }>>([]);
   const [netto, setNetto] = useState("100");
   const [vatNaFakturze, setVatNaFakturze] = useState("23");
   const [blad, setBlad] = useState("");
@@ -72,6 +76,8 @@ export default function KosztyStrona() {
     setKraj("PL");
     setNumer("");
     setOpis("");
+    setRachunek("");
+    setBialaLista("");
     setNetto("100");
     setVatNaFakturze("23");
     setData(DZIS);
@@ -87,6 +93,8 @@ export default function KosztyStrona() {
     setNumer(koszt.numer);
     setData(koszt.data);
     setOpis(koszt.opis);
+    setRachunek(koszt.rachunek || "");
+    setBialaLista(koszt.bialaLista || "");
     setNetto(String(koszt.netto));
     setVatNaFakturze(String(koszt.vatNaFakturze));
     setDostawcaId(DOSTAWCY.find((d) => d.identyfikator && d.identyfikator === koszt.identyfikator)?.id ?? "");
@@ -119,6 +127,8 @@ export default function KosztyStrona() {
         numer,
         data,
         opis,
+        rachunek,
+        bialaLista,
         netto: Number(netto),
         vatNaFakturze: Number(vatNaFakturze) || 0,
       }),
@@ -195,14 +205,34 @@ export default function KosztyStrona() {
             {bledy.netto && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.netto}</span>}
           </label>
           {rodzaj === "kraj" && (
+            <label className="pole sm:col-span-2">Rachunek dostawcy, do białej listy
+              <input className="mt-1" value={rachunek} onChange={(e) => setRachunek(e.target.value)} placeholder="26 cyfr, puste gdy nie sprawdzasz" />
+            </label>
+          )}
+          {rodzaj === "kraj" && (
             <label className="pole">VAT na fakturze
               <input className={`mt-1 ${bledy.vatNaFakturze ? "border-burak" : ""}`} type="number" step="0.01" value={vatNaFakturze} onChange={(e) => setVatNaFakturze(e.target.value)} />
               {bledy.vatNaFakturze && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.vatNaFakturze}</span>}
             </label>
           )}
         </div>
+        {bialaLista && <p className="text-sm leading-relaxed">{bialaLista}</p>}
         {blad && <p className="rounded-lg bg-burak/10 px-3 py-2 text-sm text-burak">{blad}</p>}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          {rodzaj === "kraj" && (
+            <button
+              type="button"
+              className="rounded-lg border border-linia px-4 py-2 text-sm"
+              onClick={async () => {
+                const params = new URLSearchParams({ nip: identyfikator, rachunek, data });
+                const odpowiedz = await fetch(`/api/biala-lista?${params}`);
+                const dane = await odpowiedz.json();
+                setBialaLista(dane.opis || dane.blad || "Brak odpowiedzi białej listy.");
+              }}
+            >
+              Sprawdź białą listę
+            </button>
+          )}
           <button className="rounded-lg bg-las px-4 py-2 text-white">{edytowanyId ? "Zapisz poprawkę" : "Zapisz koszt"}</button>
           {edytowanyId && <button type="button" className="rounded-lg border border-linia px-4 py-2 text-sm" onClick={wyczysc}>Anuluj</button>}
         </div>
@@ -220,6 +250,58 @@ export default function KosztyStrona() {
               : "Nie jesteś płatnikiem VAT. Przy OLX i Oferteo w CIT wchodzi brutto, a VAT-u nie odliczasz i nie płacisz go sam. Przy Google i Cursorze sam płacisz polskie 23% i nie odliczasz go, więc w CIT wchodzi netto plus ten podatek."}
           </p>
         </div>
+        <button
+          type="button"
+          className="w-full rounded-2xl border border-linia bg-karta px-4 py-3 text-left text-sm disabled:opacity-60"
+          disabled={pobieranie}
+          onClick={async () => {
+            setPobieranie(true);
+            setBlad("");
+            const data = new Date();
+            const odpowiedz = await fetch("/api/ksef/zakupy", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ rok: data.getFullYear(), miesiac: data.getMonth() + 1 }),
+            });
+            const dane = await odpowiedz.json();
+            setPobieranie(false);
+            setZakupyKsef(Array.isArray(dane.faktury) ? dane.faktury : []);
+            setBlad(dane.blad || dane.opis || "");
+            wczytaj();
+          }}
+        >
+          {pobieranie ? "Pobieram zakupy z testowego KSeF..." : "Pobierz faktury zakupu z testowego KSeF"}
+        </button>
+        {zakupyKsef.length > 0 && (
+          <ul className="max-h-64 divide-y divide-linia overflow-auto rounded-2xl border border-linia bg-karta">
+            {zakupyKsef.map((faktura) => (
+              <li key={faktura.ksefNumber} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
+                <span>
+                  <span className="block font-medium">{faktura.seller?.name || "Sprzedawca z KSeF"}</span>
+                  <span className="text-atrament/60">{faktura.invoiceNumber} · {faktura.issueDate}</span>
+                </span>
+                <button
+                  type="button"
+                  className="text-xs text-las"
+                  onClick={async () => {
+                    const data = new Date();
+                    const odpowiedz = await fetch("/api/ksef/zakupy", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ rok: data.getFullYear(), miesiac: data.getMonth() + 1, faktura }),
+                    });
+                    const dane = await odpowiedz.json();
+                    setBlad(dane.blad || dane.opis || "");
+                    setZakupyKsef((lista) => lista.filter((pozycja) => pozycja.ksefNumber !== faktura.ksefNumber));
+                    wczytaj();
+                  }}
+                >
+                  Dodaj
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <ul className="divide-y divide-linia overflow-hidden rounded-2xl border border-linia bg-karta">
           {koszty.length === 0 && <li className="p-4 text-sm">Nie ma jeszcze kosztów.</li>}
           {koszty.map((k) => (

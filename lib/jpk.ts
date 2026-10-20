@@ -1,5 +1,5 @@
 import type { Faktura, Firma, Koszt } from "./typy";
-import { fakturyOkresu, kosztyOkresu } from "./podatki";
+import { fakturyOkresu, koszykiFaktury, kosztyOkresu } from "./podatki";
 
 const NS = "http://crd.gov.pl/wzor/2025/12/19/14090/";
 const WZOR_KSEF =
@@ -65,9 +65,21 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
 
   const wierszeSprzedazy = [
     ...sprzedaż.map((f) => {
-      const nip = f.nabywca.nip.replace(/\D/g, "") || "BRAK";
+      const koszyk = koszykiFaktury(f);
+      const surowy = f.nabywca.nip.replace(/\s/g, "").toUpperCase();
+      const unijny = koszyk.nue !== 0 && /^[A-Z]{2}/.test(surowy);
+      const kod = unijny ? kodKraju(surowy.slice(0, 2)) : "";
+      const nip = unijny ? surowy.slice(2) || "BRAK" : f.nabywca.nip.replace(/\D/g, "") || "BRAK";
       const dataSprzedazy = f.dataSprzedazy && f.dataSprzedazy !== f.dataWystawienia ? `<DataSprzedazy>${f.dataSprzedazy}</DataSprzedazy>` : "";
-      return `<SprzedazWiersz><LpSprzedazy>0</LpSprzedazy><NrKontrahenta>${x(nip)}</NrKontrahenta><NazwaKontrahenta>${x(f.nabywca.nazwa)}</NazwaKontrahenta><DowodSprzedazy>${x(f.numer)}</DowodSprzedazy><DataWystawienia>${f.dataWystawienia}</DataWystawienia>${dataSprzedazy}${znacznikSprzedazy(f)}<K_19>${kwota(f.netto)}</K_19><K_20>${kwota(f.vat)}</K_20></SprzedazWiersz>`;
+      const pola = [
+        koszyk.nzw ? `<K_10>${kwota(koszyk.nzw)}</K_10>` : "",
+        koszyk.nue ? `<K_12>${kwota(koszyk.nue)}</K_12>` : "",
+        koszyk.n0 ? `<K_13>${kwota(koszyk.n0)}</K_13>` : "",
+        koszyk.n5 ? `<K_15>${kwota(koszyk.n5)}</K_15><K_16>${kwota(koszyk.v5)}</K_16>` : "",
+        koszyk.n8 ? `<K_17>${kwota(koszyk.n8)}</K_17><K_18>${kwota(koszyk.v8)}</K_18>` : "",
+        koszyk.n23 || koszyk.v23 ? `<K_19>${kwota(koszyk.n23)}</K_19><K_20>${kwota(koszyk.v23)}</K_20>` : "",
+      ].join("");
+      return `<SprzedazWiersz><LpSprzedazy>0</LpSprzedazy>${kod ? `<KodKrajuNadaniaTIN>${kod}</KodKrajuNadaniaTIN>` : ""}<NrKontrahenta>${x(nip)}</NrKontrahenta><NazwaKontrahenta>${x(f.nabywca.nazwa)}</NazwaKontrahenta><DowodSprzedazy>${x(f.numer)}</DowodSprzedazy><DataWystawienia>${f.dataWystawienia}</DataWystawienia>${dataSprzedazy}${znacznikSprzedazy(f)}${pola}</SprzedazWiersz>`;
     }),
     ...importy.map((k) => {
       const { kod, numer } = krajINumer(k.identyfikator, k.kraj);
@@ -87,8 +99,16 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
     return `<ZakupWiersz><LpZakupu>${i + 1}</LpZakupu>${kraj ? `<KodKrajuNadaniaTIN>${kraj}</KodKrajuNadaniaTIN>` : ""}<NrDostawcy>${x(numer || "BRAK")}</NrDostawcy><NazwaDostawcy>${x(k.dostawca)}</NazwaDostawcy><DowodZakupu>${x(k.numer)}</DowodZakupu><DataZakupu>${k.data}</DataZakupu><DataWplywu>${k.data}</DataWplywu>${znacznik}${kwoty}</ZakupWiersz>`;
   });
 
-  const p19 = sprzedaż.reduce((s, f) => s + f.netto, 0);
-  const p20 = sprzedaż.reduce((s, f) => s + f.vat, 0);
+  const koszyki = sprzedaż.map(koszykiFaktury);
+  const p10 = koszyki.reduce((s, k) => s + k.nzw, 0);
+  const p12 = koszyki.reduce((s, k) => s + k.nue, 0);
+  const p13 = koszyki.reduce((s, k) => s + k.n0, 0);
+  const p15 = koszyki.reduce((s, k) => s + k.n5, 0);
+  const p16 = koszyki.reduce((s, k) => s + k.v5, 0);
+  const p17 = koszyki.reduce((s, k) => s + k.n8, 0);
+  const p18 = koszyki.reduce((s, k) => s + k.v8, 0);
+  const p19 = koszyki.reduce((s, k) => s + k.n23, 0);
+  const p20 = koszyki.reduce((s, k) => s + k.v23, 0);
   const ue = kosztyMiesiaca.filter((k) => k.rodzaj === "ue");
   const poza = kosztyMiesiaca.filter((k) => k.rodzaj === "poza_ue");
   const p29 = ue.reduce((s, k) => s + k.netto, 0);
@@ -97,6 +117,13 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
   const p28 = poza.reduce((s, k) => s + k.vatNalezny, 0);
   const p42 = zakupy.reduce((s, k) => s + (k.vatNaliczony !== 0 ? k.netto : 0), 0);
   const p43 = zakupy.reduce((s, k) => s + k.vatNaliczony, 0);
+  const z10 = doZlotych(p10);
+  const z12 = doZlotych(p12);
+  const z13 = doZlotych(p13);
+  const z15 = doZlotych(p15);
+  const z16 = doZlotych(p16);
+  const z17 = doZlotych(p17);
+  const z18 = doZlotych(p18);
   const z19 = doZlotych(p19);
   const z20 = doZlotych(p20);
   const z27 = doZlotych(p27);
@@ -105,12 +132,12 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
   const z30 = doZlotych(p30);
   const z42 = doZlotych(p42);
   const z43 = doZlotych(p43);
-  const z37 = z19 + z27 + z29;
-  const z38 = z20 + z28 + z30;
+  const z37 = z10 + z13 + z15 + z17 + z19 + z27 + z29;
+  const z38 = z16 + z18 + z20 + z28 + z30;
   const z48 = z43;
   const z51 = Math.max(0, z38 - z48);
   const z62 = Math.max(0, z48 - z38);
-  const podatekNaleznyWiersze = p20 + p28 + p30;
+  const podatekNaleznyWiersze = p16 + p18 + p20 + p28 + p30;
   const nip = firma.nip.replace(/\D/g, "");
   const teraz = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const para = (a: number, b: number, nazwaA: string, nazwaB: string) =>
@@ -137,6 +164,11 @@ export function jpkV7m(firma: Firma, faktury: Faktura[], koszty: Koszt[], rok: n
       <WariantFormularzaDekl>23</WariantFormularzaDekl>
     </Naglowek>
     <PozycjeSzczegolowe>
+      ${z10 ? `<P_10>${z10}</P_10>` : ""}
+      ${z12 ? `<P_11>0</P_11><P_12>${z12}</P_12>` : ""}
+      ${z13 ? `<P_13>${z13}</P_13>` : ""}
+      ${para(z15, z16, "P_15", "P_16")}
+      ${para(z17, z18, "P_17", "P_18")}
       ${para(z19, z20, "P_19", "P_20")}
       ${para(z27, z28, "P_27", "P_28")}
       ${para(z29, z30, "P_29", "P_30")}

@@ -1,4 +1,4 @@
-import { uzupelnijFirme, type Faktura, type Firma, type Koszt, type RodzajKosztu, type TypFaktury } from "./typy";
+import { uzupelnijFirme, type Faktura, type Firma, type Koszt, type Pozycja, type RodzajKosztu, type StawkaVat, type TypFaktury } from "./typy";
 
 export const LIMIT_VAT = 200_000;
 
@@ -12,11 +12,28 @@ export function zlote(grosz: number): number {
   return grosz / 100;
 }
 
-export function vatOdNettoGr(nettoGr: number, platnikVat: boolean): number {
-  if (!platnikVat || nettoGr === 0) return 0;
+export function vatOdProcentuGr(nettoGr: number, procent: number): number {
+  if (procent <= 0 || nettoGr === 0) return 0;
   const znak = nettoGr < 0 ? -1 : 1;
   const abs = Math.abs(nettoGr);
-  return znak * Math.round((abs * 23) / 100);
+  return znak * Math.floor((abs * procent + 50) / 100);
+}
+
+export function vatOdNettoGr(nettoGr: number, platnikVat: boolean): number {
+  return vatOdProcentuGr(nettoGr, platnikVat ? 23 : 0);
+}
+
+export function stawkaPozycji(pozycja: Pick<Pozycja, "stawka">, platnikVat: boolean): StawkaVat {
+  if (pozycja.stawka === "ue") return "ue";
+  if (!platnikVat) return "zw";
+  if (pozycja.stawka === 23 || pozycja.stawka === 8 || pozycja.stawka === 5 || pozycja.stawka === 0 || pozycja.stawka === "zw") {
+    return pozycja.stawka;
+  }
+  return 23;
+}
+
+export function procentStawki(stawka: StawkaVat): number {
+  return stawka === "zw" || stawka === "ue" ? 0 : stawka;
 }
 
 export function procentCit(firma: Pick<Firma, "rodzaj" | "cit">): number {
@@ -29,9 +46,9 @@ export function citOdPrzychoduGr(przychodGr: number, procent = 19): number {
   return Math.round((przychodGr * procent) / 100);
 }
 
-export function kwotyPozycji(ilosc: number, cenaNetto: number, platnikVat: boolean) {
-  const nettoGr = grosze(ilosc * cenaNetto);
-  const vatGr = vatOdNettoGr(nettoGr, platnikVat);
+export function kwotyPozycji(pozycja: Pozycja, platnikVat: boolean) {
+  const nettoGr = grosze(pozycja.ilosc * pozycja.cenaNetto);
+  const vatGr = vatOdProcentuGr(nettoGr, procentStawki(stawkaPozycji(pozycja, platnikVat)));
   return {
     netto: zlote(nettoGr),
     vat: zlote(vatGr),
@@ -39,17 +56,36 @@ export function kwotyPozycji(ilosc: number, cenaNetto: number, platnikVat: boole
   };
 }
 
-export function sumaPozycji(
-  pozycje: { ilosc: number; cenaNetto: number }[],
-  platnikVat: boolean,
-) {
-  const nettoGr = pozycje.reduce((s, p) => s + grosze(p.ilosc * p.cenaNetto), 0);
-  const vatGr = vatOdNettoGr(nettoGr, platnikVat);
-  return {
-    netto: zlote(nettoGr),
-    vat: zlote(vatGr),
-    brutto: zlote(nettoGr + vatGr),
-  };
+export function sumaPozycji(pozycje: Pozycja[], platnikVat: boolean) {
+  return pozycje.reduce(
+    (suma, pozycja) => {
+      const kwoty = kwotyPozycji(pozycja, platnikVat);
+      return {
+        netto: suma.netto + kwoty.netto,
+        vat: suma.vat + kwoty.vat,
+        brutto: suma.brutto + kwoty.brutto,
+      };
+    },
+    { netto: 0, vat: 0, brutto: 0 },
+  );
+}
+
+export function koszykiFaktury(faktura: Faktura) {
+  const koszyk = { n23: 0, v23: 0, n8: 0, v8: 0, n5: 0, v5: 0, n0: 0, nzw: 0, nue: 0 };
+  const pozycje = faktura.pozycje?.length
+    ? faktura.pozycje
+    : [{ nazwa: "", ilosc: 1, cenaNetto: faktura.netto, stawka: faktura.platnikVat && faktura.vat !== 0 ? 23 : "zw" } as Pozycja];
+  for (const pozycja of pozycje) {
+    const stawka = stawkaPozycji(pozycja, faktura.platnikVat || pozycja.stawka === "ue");
+    const kwoty = kwotyPozycji(pozycja, faktura.platnikVat || pozycja.stawka === "ue");
+    if (stawka === 23) { koszyk.n23 += kwoty.netto; koszyk.v23 += kwoty.vat; }
+    else if (stawka === 8) { koszyk.n8 += kwoty.netto; koszyk.v8 += kwoty.vat; }
+    else if (stawka === 5) { koszyk.n5 += kwoty.netto; koszyk.v5 += kwoty.vat; }
+    else if (stawka === 0) koszyk.n0 += kwoty.netto;
+    else if (stawka === "ue") koszyk.nue += kwoty.netto;
+    else koszyk.nzw += kwoty.netto;
+  }
+  return koszyk;
 }
 
 export function wliczaSieDoPodatku(typ: TypFaktury): boolean {

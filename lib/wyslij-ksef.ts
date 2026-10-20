@@ -44,11 +44,9 @@ async function ksef<T>(api: string, sciezka: string, opcje: RequestInit = {}): P
   return dane as T;
 }
 
-export async function wyslijDoKsef(faktura: Faktura, firma: Firma, wszystkie: Faktura[]) {
+export async function zalogujKsef() {
   const konfiguracja = await czytajKsef();
   if (!konfiguracja.token) throw new Error("Brak tokena KSeF w klucze.hpp.");
-  if (faktura.typ === "proforma") throw new Error("Proforma nie idzie do KSeF.");
-
   const certyfikaty = await ksef<Cert[]>(konfiguracja.api, "/security/public-key-certificates", { method: "GET" });
   const doTokena = certyfikaty.find((c) => c.usage?.includes("KsefTokenEncryption"));
   const doKlucza = certyfikaty.find((c) => c.usage?.includes("SymmetricKeyEncryption"));
@@ -93,6 +91,15 @@ export async function wyslijDoKsef(faktura: Faktura, firma: Firma, wszystkie: Fa
     headers: { Authorization: `Bearer ${start.authenticationToken.token}` },
   });
   const access = tokeny.accessToken.token;
+  return { api: konfiguracja.api, access, nip: konfiguracja.nip, certyfikatKlucza: doKlucza.certificate };
+}
+
+export async function wyslijDoKsef(faktura: Faktura, firma: Firma, wszystkie: Faktura[]) {
+  if (faktura.typ === "proforma") throw new Error("Proforma nie idzie do KSeF.");
+  const sesjaLogowania = await zalogujKsef();
+  const konfiguracja = { nip: sesjaLogowania.nip };
+  const access = sesjaLogowania.access;
+  const doKlucza = { certificate: sesjaLogowania.certyfikatKlucza };
 
   const xml = fakturaFa3(faktura, faktura.sprzedawca ?? firma, konfiguracja.nip, wszystkie);
   const plain = Buffer.from(xml, "utf8");
@@ -101,7 +108,7 @@ export async function wyslijDoKsef(faktura: Faktura, firma: Firma, wszystkie: Fa
   const szyfr = crypto.createCipheriv("aes-256-cbc", klucz, iv);
   const zaszyfrowana = Buffer.concat([szyfr.update(plain), szyfr.final()]);
 
-  const sesja = await ksef<{ referenceNumber: string }>(konfiguracja.api, "/sessions/online", {
+  const sesja = await ksef<{ referenceNumber: string }>(sesjaLogowania.api, "/sessions/online", {
     method: "POST",
     headers: { Authorization: `Bearer ${access}` },
     body: JSON.stringify({
@@ -114,7 +121,7 @@ export async function wyslijDoKsef(faktura: Faktura, firma: Firma, wszystkie: Fa
   });
 
   const wysylka = await ksef<{ referenceNumber: string }>(
-    konfiguracja.api,
+    sesjaLogowania.api,
     `/sessions/online/${sesja.referenceNumber}/invoices`,
     {
       method: "POST",
@@ -130,7 +137,7 @@ export async function wyslijDoKsef(faktura: Faktura, firma: Firma, wszystkie: Fa
     },
   );
 
-  await ksef(konfiguracja.api, `/sessions/online/${sesja.referenceNumber}/close`, {
+  await ksef(sesjaLogowania.api, `/sessions/online/${sesja.referenceNumber}/close`, {
     method: "POST",
     headers: { Authorization: `Bearer ${access}` },
   });
@@ -139,7 +146,7 @@ export async function wyslijDoKsef(faktura: Faktura, firma: Firma, wszystkie: Fa
   let opis = "przyjęta do przetwarzania";
   for (let i = 0; i < 12; i++) {
     const status = await ksef<{ status: { code: number; description: string }; ksefNumber?: string }>(
-      konfiguracja.api,
+      sesjaLogowania.api,
       `/sessions/${sesja.referenceNumber}/invoices/${wysylka.referenceNumber}`,
       { headers: { Authorization: `Bearer ${access}` } },
     );
