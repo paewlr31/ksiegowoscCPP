@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { usunFakture, wczytajBaze, zapiszFakture, zapiszFirme } from "@/lib/magazyn";
 import { fakturaZVat, sumaPozycji, terminPlatnosci } from "@/lib/podatki";
-import type { Faktura, Pozycja, TypFaktury } from "@/lib/typy";
+import type { Faktura, Nabywca, Pozycja, TypFaktury } from "@/lib/typy";
+import { bledyNabywcy, bledyPozycji, pierwszyBlad } from "@/lib/walidacja";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +23,9 @@ export async function PUT(zadanie: Request, kontekst: Kontekst) {
       return NextResponse.json({ blad: "Korekta musi wskazywać fakturę, którą poprawia." }, { status: 400 });
     }
     const pozycje = (cialo.pozycje ?? byla.pozycje) as Pozycja[];
-    if (!pozycje.length || pozycje.some((p) => !p.nazwa.trim())) {
-      return NextResponse.json({ blad: "Dodaj przynajmniej jedną pozycję z nazwą." }, { status: 400 });
-    }
     const nabywca = cialo.nabywca ?? byla.nabywca;
-    if (!nabywca.nazwa?.trim()) {
-      return NextResponse.json({ blad: "Wpisz nazwę nabywcy." }, { status: 400 });
-    }
+    const znalezione = { ...bledyNabywcy(nabywca as Nabywca), ...bledyPozycji(pozycje, typ) };
+    if (pierwszyBlad(znalezione)) return NextResponse.json({ blad: pierwszyBlad(znalezione) }, { status: 400 });
     const dataWystawienia = cialo.dataWystawienia ?? byla.dataWystawienia;
     const pozostale = baza.faktury.filter((f) => f.id !== id);
     const nettoTej = sumaPozycji(pozycje, false).netto;

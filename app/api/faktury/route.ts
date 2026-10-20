@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { wczytajBaze, zapiszFakture, zapiszFirme } from "@/lib/magazyn";
 import { fakturaZVat, nastepnyNumer, sumaPozycji, terminPlatnosci } from "@/lib/podatki";
-import type { Faktura, Pozycja, TypFaktury } from "@/lib/typy";
+import { pustyNabywca, type Faktura, type Pozycja, type TypFaktury } from "@/lib/typy";
+import { bledyNabywcy, bledyPozycji, pierwszyBlad } from "@/lib/walidacja";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +27,8 @@ export async function POST(zadanie: Request) {
       return NextResponse.json({ blad: "Korekta musi wskazywać fakturę, którą poprawia." }, { status: 400 });
     }
     const pozycje = (cialo.pozycje ?? []) as Pozycja[];
-    if (!pozycje.length || pozycje.some((p) => !p.nazwa.trim())) {
-      return NextResponse.json({ blad: "Dodaj przynajmniej jedną pozycję z nazwą." }, { status: 400 });
-    }
-    if (!cialo.nabywca?.nazwa?.trim()) {
-      return NextResponse.json({ blad: "Wpisz nazwę nabywcy." }, { status: 400 });
-    }
+    const znalezione = { ...bledyNabywcy(cialo.nabywca ?? pustyNabywca()), ...bledyPozycji(pozycje, typ) };
+    if (pierwszyBlad(znalezione)) return NextResponse.json({ blad: pierwszyBlad(znalezione) }, { status: 400 });
     const nettoTej = sumaPozycji(pozycje, false).netto;
     const zVat = fakturaZVat(baza.firma, baza.faktury, cialo.dataWystawienia, nettoTej, typ);
     if (zVat && !baza.firma.platnikVat) await zapiszFirme({ ...baza.firma, platnikVat: true });

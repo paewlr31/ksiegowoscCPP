@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import type { Faktura, Firma } from "@/lib/typy";
 import { LIMIT_VAT, obrotRoku, pieniadze } from "@/lib/podatki";
+import { bledyFirmy, pierwszyBlad, type Bledy } from "@/lib/walidacja";
 
 export default function DaneFirmy() {
   const [firma, setFirma] = useState<Firma | null>(null);
   const [faktury, setFaktury] = useState<Faktura[]>([]);
   const [zapis, setZapis] = useState("");
   const [blad, setBlad] = useState("");
+  const [bledy, setBledy] = useState<Bledy>({});
 
   useEffect(() => {
     Promise.all([fetch("/api/firma").then((r) => r.json()), fetch("/api/faktury").then((r) => r.json())]).then(
@@ -24,6 +26,9 @@ export default function DaneFirmy() {
     if (!firma) return;
     setZapis("");
     setBlad("");
+    const znalezione = bledyFirmy(firma);
+    setBledy(znalezione);
+    if (pierwszyBlad(znalezione)) return;
     const odpowiedz = await fetch("/api/firma", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -41,10 +46,11 @@ export default function DaneFirmy() {
       <label className={`pole ${szerokie ? "sm:col-span-2" : ""}`}>
         {etykieta}
         <input
-          className="mt-1"
+          className={`mt-1 ${bledy[String(klucz)] ? "border-burak" : ""}`}
           value={String(firma?.[klucz] ?? "")}
           onChange={(e) => setFirma({ ...firma!, [klucz]: e.target.value })}
         />
+        {bledy[String(klucz)] && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy[String(klucz)]}</span>}
       </label>
     );
   }
@@ -88,7 +94,8 @@ export default function DaneFirmy() {
         {pole("telefon", "Telefon")}
         <label className="pole">
           NIP
-          <input className="mt-1" value={firma.nip} onChange={(e) => setFirma({ ...firma, nip: e.target.value })} />
+          <input className={`mt-1 ${bledy.nip ? "border-burak" : ""}`} value={firma.nip} onChange={(e) => setFirma({ ...firma, nip: e.target.value })} />
+          {bledy.nip && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.nip}</span>}
           <button type="button" className="mt-1 text-xs normal-case tracking-normal text-las underline" onClick={() => setFirma({ ...firma, nip: "1111111111" })}>
             Wstaw testowy 1111111111
           </button>

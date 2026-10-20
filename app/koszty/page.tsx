@@ -1,17 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DOSTAWCY } from "@/lib/dostawcy";
 import { policzKoszt, pieniadze } from "@/lib/podatki";
 import type { Firma, Koszt, RodzajKosztu } from "@/lib/typy";
+import { bledyKosztu, type Bledy } from "@/lib/walidacja";
 
 const DZIS = new Date().toISOString().slice(0, 10);
-
-const WZORY: { nazwa: string; rodzaj: RodzajKosztu; kraj: string; dostawca: string; identyfikator: string; opis: string }[] = [
-  { nazwa: "OLX", rodzaj: "kraj", kraj: "PL", dostawca: "Grupa OLX", identyfikator: "", opis: "Reklama OLX" },
-  { nazwa: "Oferteo", rodzaj: "kraj", kraj: "PL", dostawca: "Oferteo", identyfikator: "", opis: "Ogłoszenie Oferteo" },
-  { nazwa: "Google Ads", rodzaj: "ue", kraj: "IE", dostawca: "Google Ireland Limited", identyfikator: "IE", opis: "Google Ads" },
-  { nazwa: "Cursor", rodzaj: "poza_ue", kraj: "US", dostawca: "Anysphere, Inc.", identyfikator: "", opis: "Cursor AI" },
-];
 
 const OPIS_RODZAJU: Record<RodzajKosztu, string> = {
   kraj: "Polska faktura. Do KSeF jej nie wysyłasz: polski sprzedawca sam ją tam wystawia, a ty ją odbierasz. Tu wpisujesz ją, żeby weszła w VAT i CIT.",
@@ -32,6 +27,8 @@ export default function KosztyStrona() {
   const [netto, setNetto] = useState("100");
   const [vatNaFakturze, setVatNaFakturze] = useState("23");
   const [blad, setBlad] = useState("");
+  const [bledy, setBledy] = useState<Bledy>({});
+  const [dostawcaId, setDostawcaId] = useState("");
 
   function wczytaj() {
     return Promise.all([fetch("/api/firma").then((r) => r.json()), fetch("/api/koszty").then((r) => r.json())]).then(
@@ -53,18 +50,32 @@ export default function KosztyStrona() {
     [rodzaj, netto, vatNaFakturze, firma?.platnikVat],
   );
 
-  function wzor(w: (typeof WZORY)[number]) {
-    setRodzaj(w.rodzaj);
-    setKraj(w.kraj);
-    setDostawca(w.dostawca);
-    setIdentyfikator(w.identyfikator);
-    setOpis(w.opis);
-    if (w.rodzaj !== "kraj") setVatNaFakturze("0");
+  function wybierzDostawce(id: string) {
+    setDostawcaId(id);
+    const znaleziony = DOSTAWCY.find((d) => d.id === id);
+    if (!znaleziony) return;
+    setRodzaj(znaleziony.rodzaj);
+    setKraj(znaleziony.kraj);
+    setDostawca(znaleziony.dostawca);
+    setIdentyfikator(znaleziony.identyfikator);
+    setOpis(znaleziony.opis);
+    setVatNaFakturze(znaleziony.rodzaj === "kraj" ? (Number(netto) * 0.23).toFixed(2) : "0");
   }
 
   async function zapisz(e: React.FormEvent) {
     e.preventDefault();
     setBlad("");
+    const znalezione = bledyKosztu({
+      rodzaj,
+      dostawca,
+      identyfikator,
+      kraj,
+      numer,
+      netto: Number(netto),
+      vatNaFakturze: Number(vatNaFakturze) || 0,
+    });
+    setBledy(znalezione);
+    if (Object.keys(znalezione).length) return;
     const odpowiedz = await fetch("/api/koszty", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -96,13 +107,17 @@ export default function KosztyStrona() {
           <h1 className="font-serif text-4xl">Koszty</h1>
           <p className="mt-1 text-sm text-atrament/70">OLX i Oferteo są krajowe. Google Ads jest z Unii. Cursor jest spoza Unii.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {WZORY.map((w) => (
-            <button key={w.nazwa} type="button" onClick={() => wzor(w)} className="rounded-full border border-linia px-3 py-1 text-sm">
-              {w.nazwa}
-            </button>
-          ))}
-        </div>
+        <label className="pole">Znany dostawca
+          <select className="mt-1" value={dostawcaId} onChange={(e) => wybierzDostawce(e.target.value)}>
+            <option value="">Wpiszę sam</option>
+            {DOSTAWCY.map((d) => (
+              <option key={d.id} value={d.id}>{d.nazwa}</option>
+            ))}
+          </select>
+          {DOSTAWCY.find((d) => d.id === dostawcaId)?.podpowiedz && (
+            <span className="mt-1 block text-xs normal-case tracking-normal text-atrament/70">{DOSTAWCY.find((d) => d.id === dostawcaId)?.podpowiedz}</span>
+          )}
+        </label>
         <label className="pole">Rodzaj
           <select className="mt-1" value={rodzaj} onChange={(e) => {
             const wartosc = e.target.value as RodzajKosztu;
@@ -118,16 +133,20 @@ export default function KosztyStrona() {
         <p className="text-sm leading-relaxed text-atrament/70">{OPIS_RODZAJU[rodzaj]}</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="pole sm:col-span-2">Dostawca
-            <input className="mt-1" value={dostawca} onChange={(e) => setDostawca(e.target.value)} required />
+            <input className={`mt-1 ${bledy.dostawca ? "border-burak" : ""}`} value={dostawca} onChange={(e) => setDostawca(e.target.value)} />
+            {bledy.dostawca && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.dostawca}</span>}
           </label>
-          <label className="pole">NIP albo numer VAT
-            <input className="mt-1" value={identyfikator} onChange={(e) => setIdentyfikator(e.target.value)} placeholder={rodzaj === "ue" ? "IE6388047V" : "NIP"} />
+          <label className="pole">{rodzaj === "kraj" ? "NIP, 10 cyfr" : rodzaj === "ue" ? "Numer VAT UE" : "Identyfikator, może być pusty"}
+            <input className={`mt-1 ${bledy.identyfikator ? "border-burak" : ""}`} value={identyfikator} onChange={(e) => setIdentyfikator(e.target.value)} placeholder={rodzaj === "ue" ? "IE6388047V" : rodzaj === "kraj" ? "10 cyfr" : "puste dla Cursora"} />
+            {bledy.identyfikator && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.identyfikator}</span>}
           </label>
           <label className="pole">Kraj
-            <input className="mt-1" value={kraj} onChange={(e) => setKraj(e.target.value)} maxLength={2} />
+            <input className={`mt-1 ${bledy.kraj ? "border-burak" : ""}`} value={kraj} onChange={(e) => setKraj(e.target.value.toUpperCase())} maxLength={2} />
+            {bledy.kraj && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.kraj}</span>}
           </label>
           <label className="pole">Numer dokumentu
-            <input className="mt-1" value={numer} onChange={(e) => setNumer(e.target.value)} required />
+            <input className={`mt-1 ${bledy.numer ? "border-burak" : ""}`} value={numer} onChange={(e) => setNumer(e.target.value)} />
+            {bledy.numer && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.numer}</span>}
           </label>
           <label className="pole">Data
             <input className="mt-1" type="date" value={data} onChange={(e) => setData(e.target.value)} required />
@@ -136,14 +155,16 @@ export default function KosztyStrona() {
             <input className="mt-1" value={opis} onChange={(e) => setOpis(e.target.value)} />
           </label>
           <label className="pole">Kwota netto
-            <input className="mt-1" type="number" step="0.01" value={netto} onChange={(e) => {
+            <input className={`mt-1 ${bledy.netto ? "border-burak" : ""}`} type="number" step="0.01" value={netto} onChange={(e) => {
               setNetto(e.target.value);
               if (rodzaj === "kraj") setVatNaFakturze((Number(e.target.value) * 0.23).toFixed(2));
             }} />
+            {bledy.netto && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.netto}</span>}
           </label>
           {rodzaj === "kraj" && (
             <label className="pole">VAT na fakturze
-              <input className="mt-1" type="number" step="0.01" value={vatNaFakturze} onChange={(e) => setVatNaFakturze(e.target.value)} />
+              <input className={`mt-1 ${bledy.vatNaFakturze ? "border-burak" : ""}`} type="number" step="0.01" value={vatNaFakturze} onChange={(e) => setVatNaFakturze(e.target.value)} />
+              {bledy.vatNaFakturze && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.vatNaFakturze}</span>}
             </label>
           )}
         </div>

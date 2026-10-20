@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ETYKIETA, pustyNabywca, type Faktura, type Firma, type Pozycja, type TypFaktury } from "@/lib/typy";
 import { fakturaZVat, pieniadze, sumaPozycji } from "@/lib/podatki";
+import { bledyNabywcy, bledyPozycji, pierwszyBlad, type Bledy } from "@/lib/walidacja";
 
 const DZIS = new Date().toISOString().slice(0, 10);
 
@@ -32,6 +33,7 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
   const [koryguje, setKoryguje] = useState("");
   const [przyczyna, setPrzyczyna] = useState("");
   const [blad, setBlad] = useState("");
+  const [bledy, setBledy] = useState<Bledy>({});
   const [zapis, setZapis] = useState(false);
 
   useEffect(() => {
@@ -79,6 +81,13 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
     if (!firma) return;
     setZapis(true);
     setBlad("");
+    const znalezione = { ...bledyNabywcy(nabywca), ...bledyPozycji(pozycje, typ) };
+    if (typ === "korekta" && !koryguje) znalezione.koryguje = "Wybierz fakturę, którą korygujesz.";
+    setBledy(znalezione);
+    if (pierwszyBlad(znalezione)) {
+      setZapis(false);
+      return;
+    }
     const odpowiedz = await fetch(edytowana ? `/api/faktury/${edytowana.id}` : "/api/faktury", {
       method: edytowana ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
@@ -180,20 +189,24 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
           <label className="pole sm:col-span-2">Nazwa
             <input className="mt-1" value={nabywca.nazwa} onChange={(e) => setNabywca({ ...nabywca, nazwa: e.target.value })} required />
           </label>
-          <label className="pole">NIP
-            <input className="mt-1" value={nabywca.nip} onChange={(e) => setNabywca({ ...nabywca, nip: e.target.value })} />
+          <label className="pole">NIP, puste gdy osoba prywatna
+            <input className={`mt-1 ${bledy.nip ? "border-burak" : ""}`} value={nabywca.nip} onChange={(e) => setNabywca({ ...nabywca, nip: e.target.value })} />
+            {bledy.nip && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.nip}</span>}
           </label>
           <label className="pole">E-mail, puste znaczy brak
-            <input className="mt-1" value={nabywca.email} onChange={(e) => setNabywca({ ...nabywca, email: e.target.value })} />
+            <input className={`mt-1 ${bledy.email ? "border-burak" : ""}`} value={nabywca.email} onChange={(e) => setNabywca({ ...nabywca, email: e.target.value })} />
+            {bledy.email && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.email}</span>}
           </label>
           <label className="pole">Telefon, puste znaczy brak
-            <input className="mt-1" value={nabywca.telefon} onChange={(e) => setNabywca({ ...nabywca, telefon: e.target.value })} />
+            <input className={`mt-1 ${bledy.telefon ? "border-burak" : ""}`} value={nabywca.telefon} onChange={(e) => setNabywca({ ...nabywca, telefon: e.target.value })} />
+            {bledy.telefon && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.telefon}</span>}
           </label>
           <label className="pole sm:col-span-2">Ulica
             <input className="mt-1" value={nabywca.ulica} onChange={(e) => setNabywca({ ...nabywca, ulica: e.target.value })} />
           </label>
           <label className="pole">Kod
-            <input className="mt-1" value={nabywca.kod} onChange={(e) => setNabywca({ ...nabywca, kod: e.target.value })} />
+            <input className={`mt-1 ${bledy.kod ? "border-burak" : ""}`} value={nabywca.kod} onChange={(e) => setNabywca({ ...nabywca, kod: e.target.value })} />
+            {bledy.kod && <span className="mt-1 block text-xs normal-case tracking-normal text-burak">{bledy.kod}</span>}
           </label>
           <label className="pole">Miasto
             <input className="mt-1" value={nabywca.miasto} onChange={(e) => setNabywca({ ...nabywca, miasto: e.target.value })} />
@@ -204,13 +217,13 @@ export function FormularzFaktury({ edytowana }: { edytowana?: Faktura }) {
           {pozycje.map((p, i) => (
             <div key={i} className="grid gap-2 rounded-lg border border-linia p-3 sm:grid-cols-[1fr_5rem_8rem_auto]">
               <label className="pole">Nazwa
-                <input className="mt-1" value={p.nazwa} onChange={(e) => zmienPozycje(i, "nazwa", e.target.value)} />
+                <input className={`mt-1 ${bledy[`pozycja-${i}`] ? "border-burak" : ""}`} value={p.nazwa} onChange={(e) => zmienPozycje(i, "nazwa", e.target.value)} />
               </label>
               <label className="pole">Ilość
-                <input className="mt-1" type="number" step="0.01" value={p.ilosc} onChange={(e) => zmienPozycje(i, "ilosc", e.target.value)} />
+                <input className={`mt-1 ${bledy[`ilosc-${i}`] ? "border-burak" : ""}`} type="number" step="0.01" value={p.ilosc} onChange={(e) => zmienPozycje(i, "ilosc", e.target.value)} />
               </label>
               <label className="pole">Cena netto
-                <input className="mt-1" type="number" step="0.01" value={p.cenaNetto} onChange={(e) => zmienPozycje(i, "cenaNetto", e.target.value)} />
+                <input className={`mt-1 ${bledy[`cena-${i}`] ? "border-burak" : ""}`} type="number" step="0.01" value={p.cenaNetto} onChange={(e) => zmienPozycje(i, "cenaNetto", e.target.value)} />
               </label>
               <button type="button" className="self-end text-sm text-burak" onClick={() => setPozycje((lista) => lista.filter((_, n) => n !== i))}>
                 Usuń
