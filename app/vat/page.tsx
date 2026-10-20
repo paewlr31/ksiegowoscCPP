@@ -35,6 +35,8 @@ export default function VatStrona() {
   const zostalo = dniDo(termin);
   const poTerminie = zostalo < 0;
   const nazwaOkresu = `${String(miesiac).padStart(2, "0")}.${rok}`;
+  const jestImport = rozliczenie.importUe.length > 0 || rozliczenie.importPozaUe.length > 0;
+  const trzebaJpk = Boolean(firma?.platnikVat) || jestImport;
 
   return (
     <div className="space-y-6">
@@ -52,7 +54,7 @@ export default function VatStrona() {
         </label>
       </div>
 
-      {!firma?.platnikVat && rozliczenie.importUe.length === 0 && rozliczenie.importPozaUe.length === 0 && (
+      {!trzebaJpk && (
         <div className="rounded-2xl border border-mosiadz/40 bg-karta p-5">
           <p className="font-medium">Nie jesteś płatnikiem VAT.</p>
           <p className="mt-2 text-sm leading-relaxed">
@@ -62,10 +64,13 @@ export default function VatStrona() {
         </div>
       )}
 
-      {(firma?.platnikVat || rozliczenie.importUe.length > 0 || rozliczenie.importPozaUe.length > 0) && (
+      {trzebaJpk && (
         <>
           <section className={`rounded-2xl border p-5 ${poTerminie ? "border-burak bg-burak/5" : "border-linia bg-karta"}`}>
-            <p className="text-sm">Za {nazwaOkresu} masz zapłacić VAT</p>
+            {!firma?.platnikVat && jestImport && (
+              <p className="mb-2 text-sm">Nie jesteś płatnikiem VAT, ale import usług i tak zgłaszasz i płacisz.</p>
+            )}
+            <p className="text-sm">Za {nazwaOkresu} {rozliczenie.vat > 0 ? "masz zapłacić VAT" : "nie przelewasz VAT"}</p>
             <p className="font-serif text-4xl">{pieniadze(rozliczenie.vat)} zł</p>
             <p className="mt-2 text-sm">
               Należny {pieniadze(rozliczenie.vatNalezny)} zł, odliczenie {pieniadze(rozliczenie.vatNaliczony)} zł
@@ -95,27 +100,35 @@ export default function VatStrona() {
             )}
           </section>
 
-          <details className="rounded-2xl border border-linia bg-karta p-5">
-            <summary className="cursor-pointer font-medium">Co z tym zrobić, krok po kroku</summary>
+          <details className="rounded-2xl border border-linia bg-karta p-5" open>
+            <summary className="cursor-pointer font-medium">Gdzie złożyć i jak zapłacić</summary>
             <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed">
               <li>Pobierz przyciskiem plik XML za {nazwaOkresu}.</li>
-              <li>Wejdź na testową bramkę JPK: https://test-e-dokumenty.mf.gov.pl. Na produkcji będzie https://e-dokumenty.mf.gov.pl. Na razie zostań na teście.</li>
-              <li>Wyślij tam ten XML. To jest JPK_V7M. Osobnego formularza VAT-7 już nie ma. Osobnego pliku na CIT tu nie wrzucasz.</li>
+              <li>Wyślij go na testową bramkę JPK: https://test-e-dokumenty.mf.gov.pl. To jest plik JPK_V7M. Osobnego VAT-7 nie ma.</li>
+              <li>Termin złożenia i zapłaty: {formatDaty(termin)}. {poTerminie ? "Ten termin już minął." : zostalo === 0 ? "Termin jest dzisiaj." : `Zostało ${zostalo} dni.`}</li>
               <li>
-                Podatek w wysokości {pieniadze(rozliczenie.vat)} zł przelej ręcznie do {formatDaty(termin)} na mikrorachunek{" "}
-                <span className="font-medium">{mikrorachunek || "uzupełnij go w danych firmy"}</span>.
-                W przelewie symbol formularza: VAT-7. Okres: {nazwaOkresu}.
+                {rozliczenie.vat > 0
+                  ? `Przelej ${pieniadze(rozliczenie.vat)} zł na mikrorachunek ${mikrorachunek || "(uzupełnij go w danych firmy)"}. Symbol: VAT-7. Okres: ${nazwaOkresu}.`
+                  : "Przelewu nie rób. Podatek należny został odliczony."}
               </li>
-              <li>Proform nie ma w tym pliku. Zaliczki, faktury końcowe i korekty z tego miesiąca są.</li>
+              {rozliczenie.importUe.length > 0 && (
+                <li>Dodatkowo złóż informację VAT-UE do tego samego dnia, 25., na bramce e-Deklaracji. Dotyczy tylko kosztów z Unii.</li>
+              )}
             </ol>
           </details>
 
           <ul className="divide-y divide-linia rounded-2xl border border-linia bg-karta">
-            {rozliczenie.dokumenty.length === 0 && <li className="p-4 text-sm">W tym miesiącu nie ma faktur do VAT.</li>}
+            {rozliczenie.dokumenty.length === 0 && rozliczenie.koszty.length === 0 && <li className="p-4 text-sm">W tym miesiącu nie ma dokumentów do VAT.</li>}
             {rozliczenie.dokumenty.map((f) => (
               <li key={f.id} className="flex justify-between px-4 py-3 text-sm">
                 <span>{f.numer}</span>
-                <span>VAT {pieniadze(f.vat)} zł</span>
+                <span>VAT sprzedaży {pieniadze(f.vat)} zł</span>
+              </li>
+            ))}
+            {rozliczenie.koszty.filter((k) => k.vatNalezny !== 0 || k.vatNaliczony !== 0).map((k) => (
+              <li key={k.id} className="flex justify-between px-4 py-3 text-sm">
+                <span>{k.dostawca} · {k.numer}</span>
+                <span>należny {pieniadze(k.vatNalezny)} zł, odliczenie {pieniadze(k.vatNaliczony)} zł</span>
               </li>
             ))}
           </ul>
