@@ -4,16 +4,29 @@ import { useEffect, useMemo, useState } from "react";
 import type { Faktura, Firma, Koszt } from "@/lib/typy";
 import { dniDo, formatDaty, pieniadze, procentCit, rozliczenieMiesiaca, terminPoOkresie } from "@/lib/podatki";
 
+function cyfry(wartosc: string, limit: number) {
+  return wartosc.replace(/\D/g, "").replace(/^0+/, "").slice(0, limit);
+}
+
 export default function CitStrona() {
-  const teraz = new Date();
+  const start = new Date();
   const [firma, setFirma] = useState<Firma | null>(null);
   const [faktury, setFaktury] = useState<Faktura[]>([]);
   const [koszty, setKoszty] = useState<Koszt[]>([]);
-  const [rok, setRok] = useState(teraz.getMonth() === 0 ? teraz.getFullYear() - 1 : teraz.getFullYear());
-  const [miesiac, setMiesiac] = useState(teraz.getMonth() === 0 ? 12 : teraz.getMonth());
+  const [rok, setRok] = useState(start.getFullYear());
+  const [miesiac, setMiesiac] = useState(start.getMonth() + 1);
+  const [rokPole, setRokPole] = useState(String(start.getFullYear()));
+  const [miesiacPole, setMiesiacPole] = useState(String(start.getMonth() + 1));
+  const [czasUrzadzenia, setCzasUrzadzenia] = useState("");
   const [mikrorachunek, setMikrorachunek] = useState("");
 
   useEffect(() => {
+    const data = new Date();
+    setRok(data.getFullYear());
+    setMiesiac(data.getMonth() + 1);
+    setRokPole(String(data.getFullYear()));
+    setMiesiacPole(String(data.getMonth() + 1));
+    setCzasUrzadzenia(data.toLocaleString("pl-PL", { dateStyle: "long", timeStyle: "short" }));
     Promise.all([
       fetch("/api/firma").then((r) => r.json()),
       fetch("/api/faktury").then((r) => r.json()),
@@ -54,12 +67,32 @@ export default function CitStrona() {
 
       <div className="flex flex-wrap gap-3">
         <label className="pole">Miesiąc
-          <input className="mt-1" type="number" min={1} max={12} value={miesiac} onChange={(e) => setMiesiac(Number(e.target.value))} />
+          <input
+            className="mt-1"
+            inputMode="numeric"
+            value={miesiacPole}
+            onChange={(e) => {
+              const tekst = cyfry(e.target.value, 2);
+              setMiesiacPole(tekst);
+              const liczba = Number(tekst);
+              if (liczba >= 1 && liczba <= 12) setMiesiac(liczba);
+            }}
+          />
         </label>
         <label className="pole">Rok
-          <input className="mt-1" type="number" value={rok} onChange={(e) => setRok(Number(e.target.value))} />
+          <input
+            className="mt-1"
+            inputMode="numeric"
+            value={rokPole}
+            onChange={(e) => {
+              const tekst = cyfry(e.target.value, 4);
+              setRokPole(tekst);
+              if (tekst.length === 4) setRok(Number(tekst));
+            }}
+          />
         </label>
       </div>
+      {czasUrzadzenia && <p className="text-sm text-atrament/70">Na tym urządzeniu jest {czasUrzadzenia}. Okres startuje od tego miesiąca.</p>}
 
       <section className="rounded-2xl border border-linia bg-karta p-5">
         <p className="text-sm">Szacunek zaliczki CIT za {nazwaOkresu}</p>
